@@ -1,1 +1,118 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparatore Voli Premio</title>
 
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f2f6ff;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+}
+
+.container {
+    margin-top: 60px;
+}
+
+h1 {
+    color: #1a3cff;
+}
+
+input {
+    padding: 12px;
+    margin: 8px;
+    width: 200px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+button {
+    padding: 12px 20px;
+    background: #1a3cff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+button:hover {
+    background: #0d2ae0;
+}
+
+.results {
+    margin-top: 40px;
+    font-size: 18px;
+}
+.card {
+    background: white;
+    margin: 15px auto;
+    padding: 15px;
+    width: 320px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+.good { color: green; font-weight: bold; }
+.bad { color: red; font-weight: bold; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h1>✈️ Comparatore Voli Premio</h1>
+
+    <input id="from" placeholder="Partenza (es. Milano)">
+    <input id="to" placeholder="Destinazione (es. New York)">
+    <br>
+    <button onclick="searchFlights()">Cerca voli</button>
+
+    <div class="results" id="results"></div>
+</div>
+
+<script>
+function searchFlights() {
+    const from = document.getElementById("from").value;
+    const to = document.getElementById("to").value;
+
+    if(!from || !to){
+        alert("Inserisci partenza e destinazione");
+        return;
+    }
+
+    const results = document.getElementById("results");
+    results.innerHTML = "<h2>Ricerca in corso...</h2>";
+
+    setTimeout(() => {
+        results.innerHTML = `
+        <div class="card">
+            <b>Flying Blue (Air France/KLM)</b><br>
+            ${from} → ${to}<br>
+            55.000 miglia + €220 tasse<br>
+            <span class="good">Conviene usare le miglia</span>
+        </div>
+
+        <div class="card">
+            <b>British Airways Avios</b><br>
+            ${from} → ${to}<br>
+            42.500 Avios + €480 tasse<br>
+            <span class="bad">Meglio pagare in contanti</span>
+        </div>
+
+        <div class="card">
+            <b>ITA Airways Volare</b><br>
+            ${from} → ${to}<br>
+            60.000 punti + €150 tasse<br>
+            <span class="good">Buon utilizzo punti</span>
+        </div>
+        `;
+    }, 1200);
+}
+</script>
+
+</body>
+</html>
