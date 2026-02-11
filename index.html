@@ -64,15 +64,33 @@ button:hover {
 
 <div class="container">
     <h1>✈️ Dove posso andare con i miei punti?</h1>
+    <div id="bestDeal" style="margin-bottom:25px;"></div>
 
     <select id="from">
       <option value="MXP">Milano (MXP)</option>
       <option value="FCO">Roma (FCO)</option>
     </select>
 
-    <input id="maxPoints" placeholder="Punti disponibili (es. 40000)">
-    <br>
-    <button onclick="searchFlights()">Dove posso andare?</button>
+<input id="maxPoints" placeholder="Punti disponibili (es. 40000)">
+
+<br>
+
+<select id="regionFilter">
+  <option value="all">Tutte le regioni</option>
+  <option value="Europa">Solo Europa</option>
+  <option value="Nord America">Nord America</option>
+  <option value="Asia">Asia</option>
+  <option value="Medio Oriente">Medio Oriente</option>
+</select>
+
+<select id="difficultyFilter">
+  <option value="all">Qualsiasi disponibilità</option>
+  <option value="1">Solo facile</option>
+  <option value="2">Media o facile</option>
+</select>
+
+<br>
+<button onclick="searchFlights()">Dove posso andare?</button>
 
     <div class="results" id="results"></div>
 </div>
@@ -136,15 +154,45 @@ function searchFlights() {
   fetch(`/api/search?from=${from}&maxPoints=${maxPoints}`)
     .then(response => response.json())
     .then(data => {
+        if (data.results.length > 0) {
+  const best = data.results.reduce((prev, current) =>
+    (prev.estimatedValue > current.estimatedValue) ? prev : current
+  );
 
-      if (!data.results || data.results.length === 0) {
+  document.getElementById("bestDeal").innerHTML = `
+    <div class="card" style="border:2px solid gold;">
+      🔥 <b>Miglior opportunità del momento</b><br><br>
+      ${best.destination} (${best.region})<br>
+      💸 Risparmio stimato: €${((best.cashMin + best.cashMax)/2 - best.taxes).toFixed(0)}<br>
+      ⭐ Valore: ${best.estimatedValue} cent/punto
+    </div>
+  `;
+}
+
+if (!filteredResults || filteredResults.length === 0) {
         resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata con questi punti.</h2>";
         return;
       }
 
       let html = `<h2>Destinazioni possibili:</h2>`;
+        const regionFilter = document.getElementById("regionFilter").value;
+const difficultyFilter = document.getElementById("difficultyFilter").value;
 
-      data.results.forEach(r => {
+let filteredResults = data.results.filter(r => {
+
+  if (regionFilter !== "all" && r.region !== regionFilter)
+    return false;
+
+  if (difficultyFilter === "1" && r.difficulty !== 1)
+    return false;
+
+  if (difficultyFilter === "2" && r.difficulty > 2)
+    return false;
+
+  return true;
+});
+
+filteredResults.forEach(r => {
 
         const avgCash = (r.cashMin + r.cashMax) / 2;
         const estimatedSaving = avgCash - r.taxes;
