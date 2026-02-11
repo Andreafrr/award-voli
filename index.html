@@ -66,23 +66,61 @@ button:hover {
 <div class="container">
     <h1>✈️ Comparatore Voli Premio</h1>
 
-    <input id="from" placeholder="Partenza (es. Milano)">
-    <input id="to" placeholder="Destinazione (es. New York)">
-    <br>
-    <button onclick="searchFlights()">Cerca voli</button>
+<select id="from">
+  <option value="MXP">Milano (MXP)</option>
+  <option value="FCO">Roma (FCO)</option>
+</select>
+
+<input id="maxPoints" placeholder="Punti disponibili (es. 40000)">
+<br>
+<button onclick="searchFlights()">Dove posso andare?</button>
 
     <div class="results" id="results"></div>
 </div>
 
 <script>
 function searchFlights() {
-    const from = document.getElementById("from").value;
-    const to = document.getElementById("to").value;
 
-    if(!from || !to){
-        alert("Inserisci partenza e destinazione");
+  const from = document.getElementById("from").value;
+  const maxPoints = document.getElementById("maxPoints").value;
+
+  if (!maxPoints) {
+    alert("Inserisci il numero di punti disponibili");
+    return;
+  }
+
+  const resultsDiv = document.getElementById("results");
+  resultsDiv.innerHTML = "<h2>Sto cercando le migliori destinazioni...</h2>";
+
+  fetch(`/api/search?from=${from}&maxPoints=${maxPoints}`)
+    .then(response => response.json())
+    .then(data => {
+
+      if (data.results.length === 0) {
+        resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata con questi punti.</h2>";
         return;
-    }
+      }
+
+      let html = `<h2>Destinazioni possibili:</h2>`;
+
+      data.results.forEach(r => {
+        html += `
+          <div class="card">
+            <b>${r.destination}</b> (${r.region})<br>
+            Programma consigliato: ${r.program}<br>
+            ${r.points.toLocaleString()} punti + €${r.taxes} tasse<br>
+            Disponibilità: ${r.availability}
+          </div>
+        `;
+      });
+
+      resultsDiv.innerHTML = html;
+
+    })
+    .catch(() => {
+      resultsDiv.innerHTML = "<h2>Errore nella ricerca</h2>";
+    });
+}
 
     const results = document.getElementById("results");
     results.innerHTML = "<h2>Ricerca in corso...</h2>";
