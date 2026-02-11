@@ -1,19 +1,21 @@
-export default async function handler(req, res) {
+import { routes } from "../data/routes.js";
 
-  try {
+export default function handler(req, res) {
 
-    const response = await fetch("https://example.com");
-    const text = await response.text();
+  const { from, maxPoints } = req.query;
 
-    res.status(200).json({
-      message: "Server funzionante",
-      pageLength: text.length
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      error: "Non riesco a leggere la pagina"
-    });
+  if (!from || !maxPoints) {
+    res.status(400).json({ error: "Parametri mancanti" });
+    return;
   }
 
+  const filtered = routes
+    .filter(r => r.from === from && r.points <= parseInt(maxPoints))
+    .sort((a, b) => b.valueScore - a.valueScore);
+
+  res.status(200).json({
+    from,
+    maxPoints,
+    results: filtered
+  });
 }
