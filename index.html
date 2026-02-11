@@ -144,16 +144,27 @@ function calculate(){
 
       let html = `<h2>Destinazioni possibili:</h2>`;
 
-      data.results.forEach(r => {
-        html += `
-          <div class="card">
-            <b>${r.destination}</b> (${r.region})<br>
-            Programma consigliato: ${r.program}<br>
-            ${r.points.toLocaleString()} punti + €${r.taxes} tasse<br>
-            Disponibilità: ${r.availability}
-          </div>
-        `;
-      });
+     data.results.forEach(r => {
+
+  let difficultyLabel = "";
+  if (r.difficulty === 1) difficultyLabel = "Facile";
+  if (r.difficulty === 2) difficultyLabel = "Media";
+  if (r.difficulty === 3) difficultyLabel = "Difficile";
+
+  html += `
+    <div class="card">
+      <b>${r.destination}</b> (${r.region})<br><br>
+
+      Programma consigliato: <b>${r.program}</b><br>
+      ${r.points.toLocaleString()} punti + €${r.taxes} tasse<br><br>
+
+      💰 Prezzo cash medio: €${r.cashMin} - €${r.cashMax}<br>
+      📅 Periodo migliore: ${r.bestSeason}<br>
+      📊 Valore stimato: ${r.estimatedValue} cent/punto<br>
+      🎯 Disponibilità: ${difficultyLabel}
+    </div>
+  `;
+});
 
       resultsDiv.innerHTML = html;
 
