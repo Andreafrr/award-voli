@@ -22,10 +22,10 @@ h1 {
     color: #1a3cff;
 }
 
-input {
+input, select {
     padding: 12px;
     margin: 8px;
-    width: 200px;
+    width: 220px;
     border-radius: 8px;
     border: 1px solid #ccc;
 }
@@ -48,36 +48,34 @@ button:hover {
     margin-top: 40px;
     font-size: 18px;
 }
+
 .card {
     background: white;
     margin: 15px auto;
-    padding: 15px;
-    width: 320px;
+    padding: 18px;
+    width: 340px;
     border-radius: 12px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
-.good { color: green; font-weight: bold; }
-.bad { color: red; font-weight: bold; }
 </style>
 </head>
 
 <body>
 
 <div class="container">
-    <h1>✈️ Comparatore Voli Premio</h1>
+    <h1>✈️ Dove posso andare con i miei punti?</h1>
 
-<select id="from">
-  <option value="MXP">Milano (MXP)</option>
-  <option value="FCO">Roma (FCO)</option>
-</select>
+    <select id="from">
+      <option value="MXP">Milano (MXP)</option>
+      <option value="FCO">Roma (FCO)</option>
+    </select>
 
-<input id="maxPoints" placeholder="Punti disponibili (es. 40000)">
-<br>
-<button onclick="searchFlights()">Dove posso andare?</button>
+    <input id="maxPoints" placeholder="Punti disponibili (es. 40000)">
+    <br>
+    <button onclick="searchFlights()">Dove posso andare?</button>
 
     <div class="results" id="results"></div>
 </div>
-
 
 <hr style="margin-top:60px">
 
@@ -94,6 +92,7 @@ button:hover {
 </div>
 
 <script>
+
 function calculate(){
     const cash = parseFloat(document.getElementById("cash").value);
     const points = parseFloat(document.getElementById("points").value);
@@ -120,7 +119,8 @@ function calculate(){
     document.getElementById("valueResult").innerHTML =
         `<h2>${realValue.toFixed(2)} centesimi per punto</h2><b>${rating}</b>`;
 }
-    function searchFlights() {
+
+function searchFlights() {
 
   const from = document.getElementById("from").value;
   const maxPoints = document.getElementById("maxPoints").value;
@@ -144,35 +144,38 @@ function calculate(){
 
       let html = `<h2>Destinazioni possibili:</h2>`;
 
-     data.results.forEach(r => {
+      data.results.forEach(r => {
 
-  let difficultyLabel = "";
-  if (r.difficulty === 1) difficultyLabel = "Facile";
-  if (r.difficulty === 2) difficultyLabel = "Media";
-  if (r.difficulty === 3) difficultyLabel = "Difficile";
+        const avgCash = (r.cashMin + r.cashMax) / 2;
+        const estimatedSaving = avgCash - r.taxes;
 
-data.results.forEach(r => {
+        let difficultyLabel = "";
+        if (r.difficulty === 1) difficultyLabel = "Facile";
+        if (r.difficulty === 2) difficultyLabel = "Media";
+        if (r.difficulty === 3) difficultyLabel = "Difficile";
 
-  let difficultyLabel = "";
-  if (r.difficulty === 1) difficultyLabel = "Facile";
-  if (r.difficulty === 2) difficultyLabel = "Media";
-  if (r.difficulty === 3) difficultyLabel = "Difficile";
+        let rating = "";
+        if (r.estimatedValue >= 2.5) rating = "⭐⭐⭐⭐ Ottima opportunità";
+        else if (r.estimatedValue >= 2) rating = "⭐⭐⭐ Buona";
+        else rating = "⭐⭐ Discreta";
 
-  html += `
-    <div class="card">
-      <b>${r.destination}</b> (${r.region})<br><br>
+        html += `
+          <div class="card">
+            <b>${r.destination}</b> (${r.region})<br><br>
 
-      Programma consigliato: <b>${r.program}</b><br>
-      ${r.points.toLocaleString()} punti + €${r.taxes} tasse<br><br>
+            💳 Programma: <b>${r.program}</b><br>
+            ✈️ ${r.points.toLocaleString()} punti + €${r.taxes} tasse<br><br>
 
-      💰 Prezzo cash medio: €${r.cashMin} - €${r.cashMax}<br>
-      📅 Periodo migliore: ${r.bestSeason}<br>
-      📊 Valore stimato: ${r.estimatedValue} cent/punto<br>
-      🎯 Disponibilità: ${difficultyLabel}
-    </div>
-  `;
-});
-});
+            💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
+            💸 Risparmio stimato: <b>€${estimatedSaving.toFixed(0)}</b><br>
+            📅 Periodo ideale: ${r.bestSeason}<br><br>
+
+            📊 Valore punti: ${r.estimatedValue} cent/punto<br>
+            ⭐ ${rating}<br>
+            🎯 Disponibilità: ${difficultyLabel}
+          </div>
+        `;
+      });
 
       resultsDiv.innerHTML = html;
 
@@ -182,6 +185,7 @@ data.results.forEach(r => {
       resultsDiv.innerHTML = "<h2>Errore nella ricerca</h2>";
     });
 }
+
 </script>
 
 </body>
