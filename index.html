@@ -87,30 +87,30 @@ function searchFlights() {
     const results = document.getElementById("results");
     results.innerHTML = "<h2>Ricerca in corso...</h2>";
 
-    setTimeout(() => {
-        results.innerHTML = `
-        <div class="card">
-            <b>Flying Blue (Air France/KLM)</b><br>
-            ${from} → ${to}<br>
-            55.000 miglia + €220 tasse<br>
-            <span class="good">Conviene usare le miglia</span>
-        </div>
+    fetch(`/api/search?from=${from}&to=${to}`)
+  .then(response => response.json())
+  .then(data => {
 
-        <div class="card">
-            <b>British Airways Avios</b><br>
-            ${from} → ${to}<br>
-            42.500 Avios + €480 tasse<br>
-            <span class="bad">Meglio pagare in contanti</span>
-        </div>
+    let html = `<h2>Risultati per ${data.route}</h2>`;
 
+    data.results.forEach(r => {
+      html += `
         <div class="card">
-            <b>ITA Airways Volare</b><br>
-            ${from} → ${to}<br>
-            60.000 punti + €150 tasse<br>
-            <span class="good">Buon utilizzo punti</span>
+          <b>${r.program}</b><br>
+          ${from} → ${to}<br>
+          ${r.miles.toLocaleString()} miglia + €${r.taxes} tasse<br>
+          <span class="${r.value === 'Ottimo' || r.value === 'Buono' ? 'good' : 'bad'}">
+            ${r.value}
+          </span>
         </div>
-        `;
-    }, 1200);
+      `;
+    });
+
+    results.innerHTML = html;
+  })
+  .catch(() => {
+    results.innerHTML = "<h2>Errore nella ricerca</h2>";
+  });
 }
 </script>
 <hr style="margin-top:60px">
