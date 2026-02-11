@@ -113,6 +113,48 @@ function searchFlights() {
     }, 1200);
 }
 </script>
+<hr style="margin-top:60px">
+
+<div class="container">
+    <h1>💰 Calcolatore valore miglia</h1>
+
+    <input id="cash" placeholder="Prezzo volo (€)">
+    <input id="points" placeholder="Punti richiesti">
+    <input id="taxes" placeholder="Tasse (€)">
+    <br>
+    <button onclick="calculate()">Calcola valore</button>
+
+    <div class="results" id="valueResult"></div>
+</div>
+
+<script>
+function calculate(){
+    const cash = parseFloat(document.getElementById("cash").value);
+    const points = parseFloat(document.getElementById("points").value);
+    const taxes = parseFloat(document.getElementById("taxes").value);
+
+    if(!cash || !points || taxes===undefined){
+        alert("Inserisci tutti i valori");
+        return;
+    }
+
+    const realValue = ((cash - taxes) / points) * 100;
+
+    let rating = "";
+    if(realValue >= 3){
+        rating = "🔥 Prenota SUBITO (valore altissimo)";
+    }else if(realValue >= 2){
+        rating = "👍 Buon utilizzo punti";
+    }else if(realValue >= 1){
+        rating = "😐 Normale";
+    }else{
+        rating = "❌ Spreco di miglia";
+    }
+
+    document.getElementById("valueResult").innerHTML =
+        `<h2>${realValue.toFixed(2)} centesimi per punto</h2><b>${rating}</b>`;
+}
+</script>
 
 </body>
 </html>
