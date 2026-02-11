@@ -120,6 +120,49 @@ function calculate(){
     document.getElementById("valueResult").innerHTML =
         `<h2>${realValue.toFixed(2)} centesimi per punto</h2><b>${rating}</b>`;
 }
+    function searchFlights() {
+
+  const from = document.getElementById("from").value;
+  const maxPoints = document.getElementById("maxPoints").value;
+
+  if (!maxPoints) {
+    alert("Inserisci il numero di punti disponibili");
+    return;
+  }
+
+  const resultsDiv = document.getElementById("results");
+  resultsDiv.innerHTML = "<h2>Sto cercando le migliori destinazioni...</h2>";
+
+  fetch(`/api/search?from=${from}&maxPoints=${maxPoints}`)
+    .then(response => response.json())
+    .then(data => {
+
+      if (!data.results || data.results.length === 0) {
+        resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata con questi punti.</h2>";
+        return;
+      }
+
+      let html = `<h2>Destinazioni possibili:</h2>`;
+
+      data.results.forEach(r => {
+        html += `
+          <div class="card">
+            <b>${r.destination}</b> (${r.region})<br>
+            Programma consigliato: ${r.program}<br>
+            ${r.points.toLocaleString()} punti + €${r.taxes} tasse<br>
+            Disponibilità: ${r.availability}
+          </div>
+        `;
+      });
+
+      resultsDiv.innerHTML = html;
+
+    })
+    .catch(error => {
+      console.error(error);
+      resultsDiv.innerHTML = "<h2>Errore nella ricerca</h2>";
+    });
+}
 </script>
 
 </body>
