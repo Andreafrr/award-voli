@@ -9,11 +9,11 @@ export default function handler(req, res) {
   // Simulazione risultati (per ora)
   const results = [
     {
-      program: "Flying Blue",
-      miles: 55000,
-      taxes: 220,
-      value: "Buono"
-    },
+  program: "Flying Blue",
+  miles: 12345,
+  taxes: 99,
+  value: "SUPER TEST"
+},
     {
       program: "British Airways Avios",
       miles: 42500,
