@@ -1,35 +1,19 @@
-export default function handler(req, res) {
-  const { from, to } = req.query;
+export default async function handler(req, res) {
 
-  if (!from || !to) {
-    res.status(400).json({ error: "Parametri mancanti" });
-    return;
+  try {
+
+    const response = await fetch("https://example.com");
+    const text = await response.text();
+
+    res.status(200).json({
+      message: "Server funzionante",
+      pageLength: text.length
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      error: "Non riesco a leggere la pagina"
+    });
   }
 
-  // Simulazione risultati (per ora)
-  const results = [
-    {
-  program: "Flying Blue",
-  miles: 12345,
-  taxes: 99,
-  value: "SUPER TEST"
-},
-    {
-      program: "British Airways Avios",
-      miles: 42500,
-      taxes: 480,
-      value: "Scarso"
-    },
-    {
-      program: "ITA Airways Volare",
-      miles: 60000,
-      taxes: 150,
-      value: "Ottimo"
-    }
-  ];
-
-  res.status(200).json({
-    route: `${from} → ${to}`,
-    results: results
-  });
 }
