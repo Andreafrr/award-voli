@@ -71,26 +71,26 @@ button:hover {
       <option value="FCO">Roma (FCO)</option>
     </select>
 
-<input id="maxPoints" placeholder="Punti disponibili (es. 40000)">
+    <input id="maxPoints" placeholder="Punti disponibili (es. 40000)">
 
-<br>
+    <br>
 
-<select id="regionFilter">
-  <option value="all">Tutte le regioni</option>
-  <option value="Europa">Solo Europa</option>
-  <option value="Nord America">Nord America</option>
-  <option value="Asia">Asia</option>
-  <option value="Medio Oriente">Medio Oriente</option>
-</select>
+    <select id="regionFilter">
+      <option value="all">Tutte le regioni</option>
+      <option value="Europa">Solo Europa</option>
+      <option value="Nord America">Nord America</option>
+      <option value="Asia">Asia</option>
+      <option value="Medio Oriente">Medio Oriente</option>
+    </select>
 
-<select id="difficultyFilter">
-  <option value="all">Qualsiasi disponibilità</option>
-  <option value="1">Solo facile</option>
-  <option value="2">Media o facile</option>
-</select>
+    <select id="difficultyFilter">
+      <option value="all">Qualsiasi disponibilità</option>
+      <option value="1">Solo facile</option>
+      <option value="2">Media o facile</option>
+    </select>
 
-<br>
-<button onclick="searchFlights()">Dove posso andare?</button>
+    <br>
+    <button onclick="searchFlights()">Dove posso andare?</button>
 
     <div class="results" id="results"></div>
 </div>
@@ -124,15 +124,10 @@ function calculate(){
     const realValue = ((cash - taxes) / points) * 100;
 
     let rating = "";
-    if(realValue >= 3){
-        rating = "🔥 Prenota SUBITO (valore altissimo)";
-    }else if(realValue >= 2){
-        rating = "👍 Buon utilizzo punti";
-    }else if(realValue >= 1){
-        rating = "😐 Normale";
-    }else{
-        rating = "❌ Spreco di miglia";
-    }
+    if(realValue >= 3) rating = "🔥 Prenota SUBITO (valore altissimo)";
+    else if(realValue >= 2) rating = "👍 Buon utilizzo punti";
+    else if(realValue >= 1) rating = "😐 Normale";
+    else rating = "❌ Spreco di miglia";
 
     document.getElementById("valueResult").innerHTML =
         `<h2>${realValue.toFixed(2)} centesimi per punto</h2><b>${rating}</b>`;
@@ -154,45 +149,46 @@ function searchFlights() {
   fetch(`/api/search?from=${from}&maxPoints=${maxPoints}`)
     .then(response => response.json())
     .then(data => {
-        if (data.results.length > 0) {
-  const best = data.results.reduce((prev, current) =>
-    (prev.estimatedValue > current.estimatedValue) ? prev : current
-  );
 
-  document.getElementById("bestDeal").innerHTML = `
-    <div class="card" style="border:2px solid gold;">
-      🔥 <b>Miglior opportunità del momento</b><br><br>
-      ${best.destination} (${best.region})<br>
-      💸 Risparmio stimato: €${((best.cashMin + best.cashMax)/2 - best.taxes).toFixed(0)}<br>
-      ⭐ Valore: ${best.estimatedValue} cent/punto
-    </div>
-  `;
-}
+      const regionFilter = document.getElementById("regionFilter").value;
+      const difficultyFilter = document.getElementById("difficultyFilter").value;
 
-if (!filteredResults || filteredResults.length === 0) {
-        resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata con questi punti.</h2>";
+      let filteredResults = data.results.filter(r => {
+
+        if (regionFilter !== "all" && r.region !== regionFilter)
+          return false;
+
+        if (difficultyFilter === "1" && r.difficulty !== 1)
+          return false;
+
+        if (difficultyFilter === "2" && r.difficulty > 2)
+          return false;
+
+        return true;
+      });
+
+      if (filteredResults.length === 0) {
+        resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata con questi filtri.</h2>";
+        document.getElementById("bestDeal").innerHTML = "";
         return;
       }
 
+      const best = filteredResults.reduce((prev, current) =>
+        (prev.estimatedValue > current.estimatedValue) ? prev : current
+      );
+
+      document.getElementById("bestDeal").innerHTML = `
+        <div class="card" style="border:2px solid gold;">
+          🔥 <b>Miglior opportunità del momento</b><br><br>
+          ${best.destination} (${best.region})<br>
+          💸 Risparmio stimato: €${((best.cashMin + best.cashMax)/2 - best.taxes).toFixed(0)}<br>
+          ⭐ Valore: ${best.estimatedValue} cent/punto
+        </div>
+      `;
+
       let html = `<h2>Destinazioni possibili:</h2>`;
-        const regionFilter = document.getElementById("regionFilter").value;
-const difficultyFilter = document.getElementById("difficultyFilter").value;
 
-let filteredResults = data.results.filter(r => {
-
-  if (regionFilter !== "all" && r.region !== regionFilter)
-    return false;
-
-  if (difficultyFilter === "1" && r.difficulty !== 1)
-    return false;
-
-  if (difficultyFilter === "2" && r.difficulty > 2)
-    return false;
-
-  return true;
-});
-
-filteredResults.forEach(r => {
+      filteredResults.forEach(r => {
 
         const avgCash = (r.cashMin + r.cashMax) / 2;
         const estimatedSaving = avgCash - r.taxes;
@@ -210,14 +206,11 @@ filteredResults.forEach(r => {
         html += `
           <div class="card">
             <b>${r.destination}</b> (${r.region})<br><br>
-
             💳 Programma: <b>${r.program}</b><br>
             ✈️ ${r.points.toLocaleString()} punti + €${r.taxes} tasse<br><br>
-
             💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
             💸 Risparmio stimato: <b>€${estimatedSaving.toFixed(0)}</b><br>
             📅 Periodo ideale: ${r.bestSeason}<br><br>
-
             📊 Valore punti: ${r.estimatedValue} cent/punto<br>
             ⭐ ${rating}<br>
             🎯 Disponibilità: ${difficultyLabel}
