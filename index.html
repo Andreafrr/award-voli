@@ -151,6 +151,13 @@ function calculate(){
   if (r.difficulty === 2) difficultyLabel = "Media";
   if (r.difficulty === 3) difficultyLabel = "Difficile";
 
+data.results.forEach(r => {
+
+  let difficultyLabel = "";
+  if (r.difficulty === 1) difficultyLabel = "Facile";
+  if (r.difficulty === 2) difficultyLabel = "Media";
+  if (r.difficulty === 3) difficultyLabel = "Difficile";
+
   html += `
     <div class="card">
       <b>${r.destination}</b> (${r.region})<br><br>
@@ -164,6 +171,7 @@ function calculate(){
       🎯 Disponibilità: ${difficultyLabel}
     </div>
   `;
+});
 });
 
       resultsDiv.innerHTML = html;
