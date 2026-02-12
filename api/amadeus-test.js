@@ -21,21 +21,19 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Token non ottenuto", details: tokenData });
     }
 
-    // 2️⃣ Genera 5 date future (ogni 10 giorni)
+    // 2️⃣ Genera 3 date future (meno rischio timeout)
     const today = new Date();
     const dates = [];
 
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 3; i++) {
       const future = new Date(today);
-      future.setDate(today.getDate() + i * 10);
+      future.setDate(today.getDate() + i * 15);
       const formatted = future.toISOString().split("T")[0];
       dates.push(formatted);
     }
 
-    const prices = [];
-
-    // 3️⃣ Per ogni data chiama Amadeus
-    for (const date of dates) {
+    // 3️⃣ Chiamate in parallelo (molto più veloce)
+    const pricePromises = dates.map(async (date) => {
 
       const flightResponse = await fetch(
         `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=MXP&destinationLocationCode=JFK&departureDate=${date}&adults=1&max=3`,
@@ -49,14 +47,16 @@ export default async function handler(req, res) {
       const flightData = await flightResponse.json();
 
       if (flightData.data && flightData.data.length > 0) {
-
-        const lowestPrice = Math.min(
+        return Math.min(
           ...flightData.data.map(f => parseFloat(f.price.total))
         );
-
-        prices.push(lowestPrice);
       }
-    }
+
+      return null;
+    });
+
+    const results = await Promise.all(pricePromises);
+    const prices = results.filter(p => p !== null);
 
     if (prices.length === 0) {
       return res.status(200).json({ message: "Nessun prezzo trovato" });
