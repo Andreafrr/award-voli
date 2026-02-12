@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     const today = new Date();
     const dates = [];
 
-    for (let i = 1; i <= 3; i++) {
+ for (let i = 1; i <= 2; i++) {
       const future = new Date(today);
       future.setDate(today.getDate() + i * 15);
       dates.push(future.toISOString().split("T")[0]);
