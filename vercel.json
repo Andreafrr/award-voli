@@ -1,6 +1,7 @@
 {
   "functions": {
-    "api/search.js": {
+    "api/*.js": {
+      "runtime": "nodejs18.x",
       "maxDuration": 10
     }
   }
