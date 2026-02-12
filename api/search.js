@@ -12,15 +12,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Parametri mancanti" });
   }
 
+  const parsedMaxPoints = parseInt(maxPoints);
+
+  // 🔎 Filtriamo rotte di partenza
   const filtered = routes
-    .filter(r => r.from === from && r.points <= parseInt(maxPoints))
-    .sort((a, b) => b.valueScore - a.valueScore)
-    .slice(0, 3); // prendiamo solo top 3
+    .filter(r => r.from === from)
+    .sort((a, b) => b.estimatedValue - a.estimatedValue)
+    .slice(0, 3); // top 3 candidate
 
   const key = process.env.AMADEUS_API_KEY;
   const secret = process.env.AMADEUS_API_SECRET;
 
-  // 🔐 Otteniamo token Amadeus
+  // 🔐 Token Amadeus
   const tokenResponse = await fetch("https://test.api.amadeus.com/v1/security/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -34,13 +37,12 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Token Amadeus non ottenuto" });
   }
 
-  // 🔎 Funzione per calcolare range cash
+  // 🔎 Funzione range cash con cache
   async function getCashRange(origin, destination) {
 
     const cacheKey = `${origin}-${destination}`;
     const now = Date.now();
 
-    // Se in cache e non scaduto
     if (cache[cacheKey] && (now - cache[cacheKey].timestamp < CACHE_TTL)) {
       return cache[cacheKey].data;
     }
@@ -48,9 +50,10 @@ export default async function handler(req, res) {
     const today = new Date();
     const dates = [];
 
- for (let i = 1; i <= 2; i++) {
+    // SOLO 2 date per evitare timeout
+    for (let i = 1; i <= 2; i++) {
       const future = new Date(today);
-      future.setDate(today.getDate() + i * 15);
+      future.setDate(today.getDate() + i * 20);
       dates.push(future.toISOString().split("T")[0]);
     }
 
@@ -85,7 +88,6 @@ export default async function handler(req, res) {
 
     const summary = { min, max, average: avg };
 
-    // Salviamo in cache
     cache[cacheKey] = {
       timestamp: now,
       data: summary
@@ -94,32 +96,50 @@ export default async function handler(req, res) {
     return summary;
   }
 
-  // 🔥 Calcolo finale con cash reale
+  // 🔥 Arricchiamo le rotte con cash reale + Opportunity Score
   const enriched = await Promise.all(filtered.map(async (route) => {
 
     const cashData = await getCashRange(route.from, route.destinationCode);
 
     if (!cashData) {
-      return route;
+      return {
+        ...route,
+        opportunityScore: 0,
+        missingPoints: route.points > parsedMaxPoints
+          ? route.points - parsedMaxPoints
+          : 0
+      };
     }
 
     const estimatedValue =
       ((cashData.average - route.taxes) / route.points) * 100;
 
-    return {
-      ...route,
-      cashMin: cashData.min.toFixed(2),
-      cashMax: cashData.max.toFixed(2),
-      cashAverage: cashData.average.toFixed(2),
-      estimatedValue: estimatedValue.toFixed(2)
-    };
-  }));
+    const value = parseFloat(estimatedValue);
 
-  enriched.sort((a, b) => b.estimatedValue - a.estimatedValue);
+    // 1️⃣ Value component
+    let valueScore = 30;
+    if (value >= 3) valueScore = 100;
+    else if (value >= 2.5) valueScore = 85;
+    else if (value >= 2) valueScore = 70;
+    else if (value >= 1.5) valueScore = 50;
+    else if (value >= 1) valueScore = 30;
+    else valueScore = 10;
 
-  return res.status(200).json({
-    from,
-    maxPoints,
-    results: enriched
-  });
-}
+    // 2️⃣ Difficulty
+    let difficultyScore = 70;
+    if (route.difficulty === 1) difficultyScore = 100;
+    if (route.difficulty === 2) difficultyScore = 70;
+    if (route.difficulty === 3) difficultyScore = 40;
+
+    // 3️⃣ Season (temporaneamente neutro)
+    const seasonScore = 80;
+
+    // 4️⃣ Budget Fit
+    let budgetScore = 100;
+    const missingPoints = route.points - parsedMaxPoints;
+
+    if (missingPoints > 0) {
+      budgetScore = Math.max(20, 100 - (missingPoints / route.points) * 100);
+    }
+
+    const opportunityScore
