@@ -1,3 +1,7 @@
+// Cache in memoria
+const cache = {};
+const CACHE_TTL = 30 * 60 * 1000; // 30 minuti
+
 import { routes } from "../data/routes.js";
 
 export default function handler(req, res) {
