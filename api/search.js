@@ -111,13 +111,14 @@ export default async function handler(req, res) {
 
       const value = parseFloat(estimatedValue);
 
-      let valueScore = 30;
-      if (value >= 3) valueScore = 100;
-      else if (value >= 2.5) valueScore = 85;
-      else if (value >= 2) valueScore = 70;
-      else if (value >= 1.5) valueScore = 50;
-      else if (value >= 1) valueScore = 30;
-      else valueScore = 10;
+let valueScore;
+
+if (value >= 3) valueScore = 100;
+else if (value >= 2.5) valueScore = 95;
+else if (value >= 2) valueScore = 75;
+else if (value >= 1.5) valueScore = 45;
+else if (value >= 1.2) valueScore = 25;
+else valueScore = 5;
 
       let difficultyScore = 70;
       if (route.difficulty === 1) difficultyScore = 100;
