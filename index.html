@@ -167,12 +167,12 @@ function searchFlights() {
           ${best.destination} (${best.region})<br>
           💸 Risparmio stimato: €${bestSaving.toFixed(0)}<br>
           🔥 Opportunity Score: <b>${best.opportunityScore}/100</b><br>
-          ${best.opportunityScore >= 75 
-              ? "🔥 <b style='color:green;'>Alta Opportunità</b>"
-              : best.opportunityScore >= 55 
-                  ? "⚖️ <b style='color:orange;'>Buona Opportunità</b>"
-                  : "⚠️ <b style='color:red;'>Redemption Debole</b>"
-          }
+${best.opportunityScore >= 70 
+    ? "🔥 <b style='color:green;'>Alta Opportunità</b>"
+    : best.opportunityScore >= 50 
+        ? "⚖️ <b style='color:orange;'>Buona Opportunità</b>"
+        : "⚠️ <b style='color:red;'>Redemption Debole</b>"
+}
         </div>
       `;
 
@@ -193,12 +193,12 @@ function searchFlights() {
             📅 Periodo ideale: ${r.bestSeason}<br><br>
             📊 Valore punti: ${r.estimatedValue} cent/punto<br>
             🔥 Opportunity Score: <b>${r.opportunityScore}/100</b><br>
-            ${r.opportunityScore >= 75 
-                ? "🔥 <b style='color:green;'>Alta Opportunità</b><br>"
-                : r.opportunityScore >= 55 
-                    ? "⚖️ <b style='color:orange;'>Buona Opportunità</b><br>"
-                    : "⚠️ <b style='color:red;'>Redemption Debole</b><br>"
-            }
+${r.opportunityScore >= 70 
+    ? "🔥 <b style='color:green;'>Alta Opportunità</b><br>"
+    : r.opportunityScore >= 50 
+        ? "⚖️ <b style='color:orange;'>Buona Opportunità</b><br>"
+        : "⚠️ <b style='color:red;'>Redemption Debole</b><br>"
+}
             ${r.missingPoints > 0 ? `⚠️ Ti mancano ${r.missingPoints.toLocaleString()} punti<br>` : ""}
             🎯 Disponibilità: ${r.difficulty === 1 ? "Facile" : r.difficulty === 2 ? "Media" : "Difficile"}
           </div>
