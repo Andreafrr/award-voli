@@ -153,7 +153,7 @@ function searchFlights() {
         return;
       }
 
-      // 🔥 Best Deal basato su Opportunity Score
+      // BEST DEAL
       const best = filteredResults.reduce((prev, current) =>
         (prev.opportunityScore > current.opportunityScore) ? prev : current
       );
@@ -166,13 +166,13 @@ function searchFlights() {
           🔥 <b>Miglior opportunità del momento</b><br><br>
           ${best.destination} (${best.region})<br>
           💸 Risparmio stimato: €${bestSaving.toFixed(0)}<br>
-🔥 Opportunity Score: <b>${r.opportunityScore}/100</b><br>
-${r.opportunityScore >= 75 
-    ? "🔥 <b style='color:green;'>Alta Opportunità</b><br>"
-    : r.opportunityScore >= 55 
-        ? "⚖️ <b style='color:orange;'>Buona Opportunità</b><br>"
-        : "⚠️ <b style='color:red;'>Redemption Debole</b><br>"
-}
+          🔥 Opportunity Score: <b>${best.opportunityScore}/100</b><br>
+          ${best.opportunityScore >= 75 
+              ? "🔥 <b style='color:green;'>Alta Opportunità</b>"
+              : best.opportunityScore >= 55 
+                  ? "⚖️ <b style='color:orange;'>Buona Opportunità</b>"
+                  : "⚠️ <b style='color:red;'>Redemption Debole</b>"
+          }
         </div>
       `;
 
@@ -183,11 +183,6 @@ ${r.opportunityScore >= 75
         const avgCash = (parseFloat(r.cashMin) + parseFloat(r.cashMax)) / 2;
         const estimatedSaving = avgCash - parseFloat(r.taxes);
 
-        let difficultyLabel = "";
-        if (r.difficulty === 1) difficultyLabel = "Facile";
-        if (r.difficulty === 2) difficultyLabel = "Media";
-        if (r.difficulty === 3) difficultyLabel = "Difficile";
-
         html += `
           <div class="card">
             <b>${r.destination}</b> (${r.region})<br><br>
@@ -197,15 +192,15 @@ ${r.opportunityScore >= 75
             💸 Risparmio stimato: <b>€${estimatedSaving.toFixed(0)}</b><br>
             📅 Periodo ideale: ${r.bestSeason}<br><br>
             📊 Valore punti: ${r.estimatedValue} cent/punto<br>
-🔥 Opportunity Score: <b>${best.opportunityScore}/100</b><br>
-${best.opportunityScore >= 75 
-    ? "🔥 <b style='color:green;'>Alta Opportunità</b>"
-    : best.opportunityScore >= 55 
-        ? "⚖️ <b style='color:orange;'>Buona Opportunità</b>"
-        : "⚠️ <b style='color:red;'>Redemption Debole</b>"
-}
+            🔥 Opportunity Score: <b>${r.opportunityScore}/100</b><br>
+            ${r.opportunityScore >= 75 
+                ? "🔥 <b style='color:green;'>Alta Opportunità</b><br>"
+                : r.opportunityScore >= 55 
+                    ? "⚖️ <b style='color:orange;'>Buona Opportunità</b><br>"
+                    : "⚠️ <b style='color:red;'>Redemption Debole</b><br>"
+            }
             ${r.missingPoints > 0 ? `⚠️ Ti mancano ${r.missingPoints.toLocaleString()} punti<br>` : ""}
-            🎯 Disponibilità: ${difficultyLabel}
+            🎯 Disponibilità: ${r.difficulty === 1 ? "Facile" : r.difficulty === 2 ? "Media" : "Difficile"}
           </div>
         `;
       });
