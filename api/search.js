@@ -6,140 +6,161 @@ import { routes } from "../data/routes.js";
 
 export default async function handler(req, res) {
 
-  const { from, maxPoints } = req.query;
+  try {
 
-  if (!from || !maxPoints) {
-    return res.status(400).json({ error: "Parametri mancanti" });
-  }
+    const { from, maxPoints } = req.query;
 
-  const parsedMaxPoints = parseInt(maxPoints);
-
-  // 🔎 Filtriamo rotte di partenza
-  const filtered = routes
-    .filter(r => r.from === from)
-    .sort((a, b) => b.estimatedValue - a.estimatedValue)
-    .slice(0, 3); // top 3 candidate
-
-  const key = process.env.AMADEUS_API_KEY;
-  const secret = process.env.AMADEUS_API_SECRET;
-
-  // 🔐 Token Amadeus
-  const tokenResponse = await fetch("https://test.api.amadeus.com/v1/security/oauth2/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=client_credentials&client_id=${key}&client_secret=${secret}`
-  });
-
-  const tokenData = await tokenResponse.json();
-  const accessToken = tokenData.access_token;
-
-  if (!accessToken) {
-    return res.status(500).json({ error: "Token Amadeus non ottenuto" });
-  }
-
-  // 🔎 Funzione range cash con cache
-  async function getCashRange(origin, destination) {
-
-    const cacheKey = `${origin}-${destination}`;
-    const now = Date.now();
-
-    if (cache[cacheKey] && (now - cache[cacheKey].timestamp < CACHE_TTL)) {
-      return cache[cacheKey].data;
+    if (!from || !maxPoints) {
+      return res.status(400).json({ error: "Parametri mancanti" });
     }
 
-    const today = new Date();
-    const dates = [];
+    const parsedMaxPoints = parseInt(maxPoints);
 
-    // SOLO 2 date per evitare timeout
-    for (let i = 1; i <= 2; i++) {
-      const future = new Date(today);
-      future.setDate(today.getDate() + i * 20);
-      dates.push(future.toISOString().split("T")[0]);
-    }
+    const filtered = routes
+      .filter(r => r.from === from)
+      .sort((a, b) => b.estimatedValue - a.estimatedValue)
+      .slice(0, 3);
 
-    const pricePromises = dates.map(async (date) => {
+    const key = process.env.AMADEUS_API_KEY;
+    const secret = process.env.AMADEUS_API_SECRET;
 
-      const flightResponse = await fetch(
-        `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${date}&adults=1&max=3`,
-        { headers: { "Authorization": `Bearer ${accessToken}` } }
-      );
-
-      const flightData = await flightResponse.json();
-
-      if (flightData.data && flightData.data.length > 0) {
-        return Math.min(
-          ...flightData.data.map(f => parseFloat(f.price.total))
-        );
-      }
-
-      return null;
+    const tokenResponse = await fetch("https://test.api.amadeus.com/v1/security/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `grant_type=client_credentials&client_id=${key}&client_secret=${secret}`
     });
 
-    const results = await Promise.all(pricePromises);
-    const prices = results.filter(p => p !== null);
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
 
-    if (prices.length === 0) {
-      return null;
+    if (!accessToken) {
+      return res.status(500).json({ error: "Token Amadeus non ottenuto" });
     }
 
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+    async function getCashRange(origin, destination) {
 
-    const summary = { min, max, average: avg };
+      const cacheKey = `${origin}-${destination}`;
+      const now = Date.now();
 
-    cache[cacheKey] = {
-      timestamp: now,
-      data: summary
-    };
+      if (cache[cacheKey] && (now - cache[cacheKey].timestamp < CACHE_TTL)) {
+        return cache[cacheKey].data;
+      }
 
-    return summary;
-  }
+      const today = new Date();
+      const dates = [];
 
-  // 🔥 Arricchiamo le rotte con cash reale + Opportunity Score
-  const enriched = await Promise.all(filtered.map(async (route) => {
+      for (let i = 1; i <= 2; i++) {
+        const future = new Date(today);
+        future.setDate(today.getDate() + i * 20);
+        dates.push(future.toISOString().split("T")[0]);
+      }
 
-    const cashData = await getCashRange(route.from, route.destinationCode);
+      const pricePromises = dates.map(async (date) => {
 
-    if (!cashData) {
+        const flightResponse = await fetch(
+          `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${date}&adults=1&max=3`,
+          { headers: { "Authorization": `Bearer ${accessToken}` } }
+        );
+
+        const flightData = await flightResponse.json();
+
+        if (flightData.data && flightData.data.length > 0) {
+          return Math.min(
+            ...flightData.data.map(f => parseFloat(f.price.total))
+          );
+        }
+
+        return null;
+      });
+
+      const results = await Promise.all(pricePromises);
+      const prices = results.filter(p => p !== null);
+
+      if (prices.length === 0) return null;
+
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+
+      const summary = { min, max, average: avg };
+
+      cache[cacheKey] = {
+        timestamp: now,
+        data: summary
+      };
+
+      return summary;
+    }
+
+    const enriched = await Promise.all(filtered.map(async (route) => {
+
+      const cashData = await getCashRange(route.from, route.destinationCode);
+
+      const missingPoints = route.points - parsedMaxPoints;
+
+      if (!cashData) {
+        return {
+          ...route,
+          opportunityScore: 0,
+          missingPoints: missingPoints > 0 ? missingPoints : 0
+        };
+      }
+
+      const estimatedValue =
+        ((cashData.average - route.taxes) / route.points) * 100;
+
+      const value = parseFloat(estimatedValue);
+
+      let valueScore = 30;
+      if (value >= 3) valueScore = 100;
+      else if (value >= 2.5) valueScore = 85;
+      else if (value >= 2) valueScore = 70;
+      else if (value >= 1.5) valueScore = 50;
+      else if (value >= 1) valueScore = 30;
+      else valueScore = 10;
+
+      let difficultyScore = 70;
+      if (route.difficulty === 1) difficultyScore = 100;
+      if (route.difficulty === 2) difficultyScore = 70;
+      if (route.difficulty === 3) difficultyScore = 40;
+
+      const seasonScore = 80;
+
+      let budgetScore = 100;
+      if (missingPoints > 0) {
+        budgetScore = Math.max(20, 100 - (missingPoints / route.points) * 100);
+      }
+
+      const opportunityScore = (
+        valueScore * 0.5 +
+        difficultyScore * 0.2 +
+        seasonScore * 0.15 +
+        budgetScore * 0.15
+      );
+
       return {
         ...route,
-        opportunityScore: 0,
-        missingPoints: route.points > parsedMaxPoints
-          ? route.points - parsedMaxPoints
-          : 0
+        cashMin: cashData.min.toFixed(2),
+        cashMax: cashData.max.toFixed(2),
+        cashAverage: cashData.average.toFixed(2),
+        estimatedValue: value.toFixed(2),
+        opportunityScore: Math.round(opportunityScore),
+        missingPoints: missingPoints > 0 ? missingPoints : 0
       };
-    }
+    }));
 
-    const estimatedValue =
-      ((cashData.average - route.taxes) / route.points) * 100;
+    enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
-    const value = parseFloat(estimatedValue);
+    return res.status(200).json({
+      from,
+      maxPoints,
+      results: enriched
+    });
 
-    // 1️⃣ Value component
-    let valueScore = 30;
-    if (value >= 3) valueScore = 100;
-    else if (value >= 2.5) valueScore = 85;
-    else if (value >= 2) valueScore = 70;
-    else if (value >= 1.5) valueScore = 50;
-    else if (value >= 1) valueScore = 30;
-    else valueScore = 10;
-
-    // 2️⃣ Difficulty
-    let difficultyScore = 70;
-    if (route.difficulty === 1) difficultyScore = 100;
-    if (route.difficulty === 2) difficultyScore = 70;
-    if (route.difficulty === 3) difficultyScore = 40;
-
-    // 3️⃣ Season (temporaneamente neutro)
-    const seasonScore = 80;
-
-    // 4️⃣ Budget Fit
-    let budgetScore = 100;
-    const missingPoints = route.points - parsedMaxPoints;
-
-    if (missingPoints > 0) {
-      budgetScore = Math.max(20, 100 - (missingPoints / route.points) * 100);
-    }
-
-    const opportunityScore
+  } catch (error) {
+    return res.status(500).json({
+      error: "Errore interno server",
+      details: error.message
+    });
+  }
+}
