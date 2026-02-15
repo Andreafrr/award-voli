@@ -132,12 +132,12 @@ else valueScore = 5;
         budgetScore = Math.max(20, 100 - (missingPoints / route.points) * 100);
       }
 
-      const opportunityScore = (
-        valueScore * 0.5 +
-        difficultyScore * 0.2 +
-        seasonScore * 0.15 +
-        budgetScore * 0.15
-      );
+const opportunityScore = (
+  valueScore * 0.65 +
+  difficultyScore * 0.15 +
+  budgetScore * 0.15 +
+  seasonScore * 0.05
+);
 
       return {
         ...route,
