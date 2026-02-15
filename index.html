@@ -223,8 +223,8 @@ function searchFlights() {
 
       filteredResults.forEach(r => {
 
-        const avgCash = (r.cashMin + r.cashMax) / 2;
-        const estimatedSaving = avgCash - r.taxes;
+const avgCash = (parseFloat(r.cashMin) + parseFloat(r.cashMax)) / 2;
+const estimatedSaving = avgCash - parseFloat(r.taxes);
 
         let difficultyLabel = "";
         if (r.difficulty === 1) difficultyLabel = "Facile";
