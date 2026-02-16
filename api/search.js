@@ -2,7 +2,7 @@
 const cache = {};
 const CACHE_TTL = 30 * 60 * 1000; // 30 minuti
 
-import { routes } from "../data/routes.js";
+const { routes } = require("../data/routes.js");
 function getMRRequired(program, airlinePoints) {
 
   const conversionRates = {
