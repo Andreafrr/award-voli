@@ -18,7 +18,7 @@ function getMRRequired(program, airlinePoints) {
   return Math.ceil(airlinePoints * rate);
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
 
   try {
 
