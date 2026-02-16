@@ -5,7 +5,6 @@ const cache = {};
 const CACHE_TTL = 30 * 60 * 1000; // 30 minuti
 
 function getMRRequired(program, airlinePoints) {
-
   const conversionRates = {
     "Avios (Iberia / BA)": 5 / 4,
     "Flying Blue": 3 / 2,
@@ -15,7 +14,6 @@ function getMRRequired(program, airlinePoints) {
   };
 
   const rate = conversionRates[program] || 1;
-
   return Math.ceil(airlinePoints * rate);
 }
 
@@ -31,8 +29,7 @@ module.exports = async function handler(req, res) {
 
     const parsedMaxMR = parseInt(maxMR);
 
-    const filtered = routes
-      .filter(r => r.from === from);
+    const filtered = routes.filter(r => r.from === from);
 
     const key = process.env.AMADEUS_API_KEY;
     const secret = process.env.AMADEUS_API_SECRET;
@@ -111,37 +108,40 @@ module.exports = async function handler(req, res) {
 
       const mrRequired = getMRRequired(route.program, route.points);
       const mrMissing = mrRequired - parsedMaxMR;
+      const gapRatio = mrMissing > 0 ? mrMissing / mrRequired : 0;
 
       if (!cashData) {
         return {
           ...route,
           opportunityScore: 0,
           mrRequired,
-          mrMissing: mrMissing > 0 ? mrMissing : 0
+          mrMissing: mrMissing > 0 ? mrMissing : 0,
+          gapRatio
         };
       }
 
       const value = ((cashData.average - route.taxes) / route.points) * 100;
 
+      // Value score continuo
       let valueScore = Math.min(100, value * 50);
 
+      // Difficulty
       let difficultyScore = 70;
       if (route.difficulty === 1) difficultyScore = 100;
       if (route.difficulty === 2) difficultyScore = 70;
       if (route.difficulty === 3) difficultyScore = 40;
 
-      const seasonScore = 80;
-
+      // Budget penalty AGGRESSIVO
       let budgetScore = 100;
+
       if (mrMissing > 0) {
-        budgetScore = Math.max(20, 100 - (mrMissing / mrRequired) * 100);
+        budgetScore = Math.max(5, 100 - (gapRatio * 180));
       }
 
       const opportunityScore = (
-        valueScore * 0.65 +
+        valueScore * 0.6 +
         difficultyScore * 0.15 +
-        budgetScore * 0.15 +
-        seasonScore * 0.05
+        budgetScore * 0.25
       );
 
       return {
@@ -152,16 +152,26 @@ module.exports = async function handler(req, res) {
         estimatedValue: value.toFixed(2),
         opportunityScore: Math.round(opportunityScore),
         mrRequired,
-        mrMissing: mrMissing > 0 ? mrMissing : 0
+        mrMissing: mrMissing > 0 ? mrMissing : 0,
+        gapRatio
       };
     }));
 
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
+    // 🎯 Separazione sezioni
+    const bookable = enriched.filter(r => r.mrMissing === 0);
+    const almost = enriched.filter(r => r.mrMissing > 0 && r.gapRatio <= 0.25);
+    const future = enriched.filter(r => r.gapRatio > 0.25);
+
     return res.status(200).json({
       from,
       maxMR,
-      results: enriched
+      sections: {
+        bookable,
+        almost,
+        future
+      }
     });
 
   } catch (error) {
