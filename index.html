@@ -126,7 +126,7 @@ function searchFlights() {
   const resultsDiv = document.getElementById("results");
   resultsDiv.innerHTML = "<h2>Sto cercando le migliori destinazioni...</h2>";
 
-  fetch(`/api/search?from=${from}&maxPoints=${maxPoints}`)
+fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
     .then(response => response.json())
     .then(data => {
 
