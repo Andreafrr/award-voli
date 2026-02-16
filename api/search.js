@@ -3,6 +3,20 @@ const cache = {};
 const CACHE_TTL = 30 * 60 * 1000; // 30 minuti
 
 import { routes } from "../data/routes.js";
+function getMRRequired(program, airlinePoints) {
+
+  const conversionRates = {
+    "Avios (Iberia / BA)": 5 / 4,
+    "Flying Blue": 3 / 2,
+    "Emirates Skywards": 5 / 2,
+    "Singapore KrisFlyer": 3 / 2,
+    "ITA Volare": 1
+  };
+
+  const rate = conversionRates[program] || 1;
+
+  return Math.ceil(airlinePoints * rate);
+}
 
 export default async function handler(req, res) {
 
