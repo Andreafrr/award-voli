@@ -1,8 +1,9 @@
+const { routes } = require("../data/routes.js");
+
 // Cache in memoria
 const cache = {};
 const CACHE_TTL = 30 * 60 * 1000; // 30 minuti
 
-const { routes } = require("../data/routes.js");
 function getMRRequired(program, airlinePoints) {
 
   const conversionRates = {
@@ -22,40 +23,17 @@ module.exports = async function handler(req, res) {
 
   try {
 
-const { from, maxMR } = req.query;
+    const { from, maxMR } = req.query;
 
-if (!from || !maxMR) {
-  return res.status(400).json({ error: "Parametri mancanti" });
-}
-
-const parsedMaxMR = parseInt(maxMR);
-
-    // Filtra rotte per aeroporto
-const filtered = routes
-  .filter(r => r.from === from);
-      .slice(0, 3);
-
-    // Conversioni Membership Rewards → Programmi
-    function getMRRequired(program, pointsNeeded) {
-
-      const conversionTable = {
-        "Flying Blue": 3/2,
-        "Avios (Iberia / BA)": 5/4,
-        "Singapore KrisFlyer": 3/2,
-        "Emirates Skywards": 5/2,
-        "Cathay": 5/4,
-        "SAS EuroBonus": 5/4,
-        "Delta SkyMiles": 3/2,
-        "ITA Volare": 1
-      };
-
-      const ratio = conversionTable[program];
-      if (!ratio) return null;
-
-      return Math.ceil(pointsNeeded * ratio);
+    if (!from || !maxMR) {
+      return res.status(400).json({ error: "Parametri mancanti" });
     }
 
-    // 🔐 Token Amadeus
+    const parsedMaxMR = parseInt(maxMR);
+
+    const filtered = routes
+      .filter(r => r.from === from);
+
     const key = process.env.AMADEUS_API_KEY;
     const secret = process.env.AMADEUS_API_SECRET;
 
@@ -131,35 +109,33 @@ const filtered = routes
 
       const cashData = await getCashRange(route.from, route.destinationCode);
 
+      const mrRequired = getMRRequired(route.program, route.points);
+      const mrMissing = mrRequired - parsedMaxMR;
+
       if (!cashData) {
         return {
           ...route,
-          opportunityScore: 0
+          opportunityScore: 0,
+          mrRequired,
+          mrMissing: mrMissing > 0 ? mrMissing : 0
         };
       }
 
-      const estimatedValue =
-        ((cashData.average - route.taxes) / route.points) * 100;
+      const value = ((cashData.average - route.taxes) / route.points) * 100;
 
-      const value = parseFloat(estimatedValue);
+      let valueScore = Math.min(100, value * 50);
 
-      // 🔥 Value aggressivo
-      let valueScore = Math.min(100, value * 70);
-
-      let difficultyScore = route.difficulty === 1 ? 100 :
-                            route.difficulty === 2 ? 70 : 40;
+      let difficultyScore = 70;
+      if (route.difficulty === 1) difficultyScore = 100;
+      if (route.difficulty === 2) difficultyScore = 70;
+      if (route.difficulty === 3) difficultyScore = 40;
 
       const seasonScore = 80;
 
-
-const mrRequired = getMRRequired(route.program, route.points);
-const mrMissing = mrRequired - parsedMaxMR;
-
-let budgetScore = 100;
-
-if (mrMissing > 0) {
-  budgetScore = Math.max(20, 100 - (mrMissing / mrRequired) * 100);
-}
+      let budgetScore = 100;
+      if (mrMissing > 0) {
+        budgetScore = Math.max(20, 100 - (mrMissing / mrRequired) * 100);
+      }
 
       const opportunityScore = (
         valueScore * 0.65 +
@@ -168,10 +144,6 @@ if (mrMissing > 0) {
         seasonScore * 0.05
       );
 
-      // 💳 Calcolo Membership Rewards necessari
-      const mrRequired = getMRRequired(route.program, route.points);
-      const mrMissing = mrRequired ? mrRequired - parsedMaxPoints : 0;
-
       return {
         ...route,
         cashMin: cashData.min.toFixed(2),
@@ -179,23 +151,24 @@ if (mrMissing > 0) {
         cashAverage: cashData.average.toFixed(2),
         estimatedValue: value.toFixed(2),
         opportunityScore: Math.round(opportunityScore),
-mrRequired,
-mrMissing: mrMissing > 0 ? mrMissing : 0
+        mrRequired,
+        mrMissing: mrMissing > 0 ? mrMissing : 0
       };
     }));
 
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
-return res.status(200).json({
-  from,
-  maxMR,
-  results: enriched
-});
+    return res.status(200).json({
+      from,
+      maxMR,
+      results: enriched
+    });
 
   } catch (error) {
+
     return res.status(500).json({
       error: "Errore interno server",
       details: error.message
     });
   }
-}
+};
