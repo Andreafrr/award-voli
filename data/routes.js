@@ -1,4 +1,4 @@
-export const routes = [
+const routes = [
 
   // EUROPA
   {
@@ -100,3 +100,4 @@ export const routes = [
   }
 
 ];
+module.exports = { routes };
