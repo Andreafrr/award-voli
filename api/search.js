@@ -16,11 +16,32 @@ export default async function handler(req, res) {
 
     const parsedMaxPoints = parseInt(maxPoints);
 
+    // Filtra rotte per aeroporto
     const filtered = routes
       .filter(r => r.from === from)
-      .sort((a, b) => b.estimatedValue - a.estimatedValue)
       .slice(0, 3);
 
+    // Conversioni Membership Rewards → Programmi
+    function getMRRequired(program, pointsNeeded) {
+
+      const conversionTable = {
+        "Flying Blue": 3/2,
+        "Avios (Iberia / BA)": 5/4,
+        "Singapore KrisFlyer": 3/2,
+        "Emirates Skywards": 5/2,
+        "Cathay": 5/4,
+        "SAS EuroBonus": 5/4,
+        "Delta SkyMiles": 3/2,
+        "ITA Volare": 1
+      };
+
+      const ratio = conversionTable[program];
+      if (!ratio) return null;
+
+      return Math.ceil(pointsNeeded * ratio);
+    }
+
+    // 🔐 Token Amadeus
     const key = process.env.AMADEUS_API_KEY;
     const secret = process.env.AMADEUS_API_SECRET;
 
@@ -96,13 +117,10 @@ export default async function handler(req, res) {
 
       const cashData = await getCashRange(route.from, route.destinationCode);
 
-      const missingPoints = route.points - parsedMaxPoints;
-
       if (!cashData) {
         return {
           ...route,
-          opportunityScore: 0,
-          missingPoints: missingPoints > 0 ? missingPoints : 0
+          opportunityScore: 0
         };
       }
 
@@ -111,27 +129,31 @@ export default async function handler(req, res) {
 
       const value = parseFloat(estimatedValue);
 
-// Value continuo (più intelligente)
-let valueScore = Math.min(100, value * 70);
+      // 🔥 Value aggressivo
+      let valueScore = Math.min(100, value * 70);
 
-      let difficultyScore = 70;
-      if (route.difficulty === 1) difficultyScore = 100;
-      if (route.difficulty === 2) difficultyScore = 70;
-      if (route.difficulty === 3) difficultyScore = 40;
+      let difficultyScore = route.difficulty === 1 ? 100 :
+                            route.difficulty === 2 ? 70 : 40;
 
       const seasonScore = 80;
+
+      const missingPoints = route.points - parsedMaxPoints;
 
       let budgetScore = 100;
       if (missingPoints > 0) {
         budgetScore = Math.max(20, 100 - (missingPoints / route.points) * 100);
       }
 
-const opportunityScore = (
-  valueScore * 0.65 +
-  difficultyScore * 0.15 +
-  budgetScore * 0.15 +
-  seasonScore * 0.05
-);
+      const opportunityScore = (
+        valueScore * 0.65 +
+        difficultyScore * 0.15 +
+        budgetScore * 0.15 +
+        seasonScore * 0.05
+      );
+
+      // 💳 Calcolo Membership Rewards necessari
+      const mrRequired = getMRRequired(route.program, route.points);
+      const mrMissing = mrRequired ? mrRequired - parsedMaxPoints : 0;
 
       return {
         ...route,
@@ -140,7 +162,9 @@ const opportunityScore = (
         cashAverage: cashData.average.toFixed(2),
         estimatedValue: value.toFixed(2),
         opportunityScore: Math.round(opportunityScore),
-        missingPoints: missingPoints > 0 ? missingPoints : 0
+        missingPoints: missingPoints > 0 ? missingPoints : 0,
+        mrRequired,
+        mrMissing: mrMissing > 0 ? mrMissing : 0
       };
     }));
 
