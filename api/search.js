@@ -8,17 +8,17 @@ export default async function handler(req, res) {
 
   try {
 
-    const { from, maxPoints } = req.query;
+const { from, maxMR } = req.query;
 
-    if (!from || !maxPoints) {
-      return res.status(400).json({ error: "Parametri mancanti" });
-    }
+if (!from || !maxMR) {
+  return res.status(400).json({ error: "Parametri mancanti" });
+}
 
-    const parsedMaxPoints = parseInt(maxPoints);
+const parsedMaxMR = parseInt(maxMR);
 
     // Filtra rotte per aeroporto
-    const filtered = routes
-      .filter(r => r.from === from)
+const filtered = routes
+  .filter(r => r.from === from);
       .slice(0, 3);
 
     // Conversioni Membership Rewards → Programmi
@@ -137,12 +137,15 @@ export default async function handler(req, res) {
 
       const seasonScore = 80;
 
-      const missingPoints = route.points - parsedMaxPoints;
 
-      let budgetScore = 100;
-      if (missingPoints > 0) {
-        budgetScore = Math.max(20, 100 - (missingPoints / route.points) * 100);
-      }
+const mrRequired = getMRRequired(route.program, route.points);
+const mrMissing = mrRequired - parsedMaxMR;
+
+let budgetScore = 100;
+
+if (mrMissing > 0) {
+  budgetScore = Math.max(20, 100 - (mrMissing / mrRequired) * 100);
+}
 
       const opportunityScore = (
         valueScore * 0.65 +
@@ -162,19 +165,18 @@ export default async function handler(req, res) {
         cashAverage: cashData.average.toFixed(2),
         estimatedValue: value.toFixed(2),
         opportunityScore: Math.round(opportunityScore),
-        missingPoints: missingPoints > 0 ? missingPoints : 0,
-        mrRequired,
-        mrMissing: mrMissing > 0 ? mrMissing : 0
+mrRequired,
+mrMissing: mrMissing > 0 ? mrMissing : 0
       };
     }));
 
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
-    return res.status(200).json({
-      from,
-      maxPoints,
-      results: enriched
-    });
+return res.status(200).json({
+  from,
+  maxMR,
+  results: enriched
+});
 
   } catch (error) {
     return res.status(500).json({
