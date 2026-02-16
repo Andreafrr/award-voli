@@ -21,7 +21,7 @@ body {
     padding: 30px;
     border-radius: 16px;
     width: 90%;
-    max-width: 700px;
+    max-width: 800px;
     margin-left: auto;
     margin-right: auto;
     box-shadow: 0 10px 30px rgba(0,0,0,0.05);
@@ -31,10 +31,11 @@ h1 {
     color: #0f172a;
     font-size: 28px;
     font-weight: 700;
-    margin-bottom: 10px;
 }
 
-p { color: #475569; }
+h2 {
+    margin-top: 40px;
+}
 
 input, select {
     padding: 12px;
@@ -51,25 +52,21 @@ button {
     border: none;
     border-radius: 10px;
     cursor: pointer;
-    font-size: 15px;
     font-weight: 600;
-    transition: all 0.2s ease;
-}
-
-button:hover {
-    background: #4338ca;
-    transform: translateY(-2px);
 }
 
 .card {
     background: white;
     margin: 20px auto;
     padding: 22px;
-    width: 100%;
-    max-width: 500px;
     border-radius: 14px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.06);
     text-align: left;
+}
+
+.section-title {
+    font-size: 20px;
+    margin-top: 50px;
 }
 </style>
 </head>
@@ -77,41 +74,54 @@ button:hover {
 <body>
 
 <div class="container">
-<h1>🎯 Scopri dove i tuoi punti valgono di più</h1>
-<p>Analizza destinazioni, valore per punto e risparmio stimato in pochi secondi.</p>
 
-<div id="bestDeal" style="margin-bottom:25px;"></div>
+<h1>🎯 Scopri dove i tuoi punti valgono di più</h1>
 
 <select id="from">
   <option value="MXP">Milano (MXP)</option>
   <option value="FCO">Roma (FCO)</option>
 </select>
 
-<input id="maxPoints" placeholder="Punti disponibili (es. 40000)">
-
-<br>
-
-<select id="regionFilter">
-  <option value="all">Tutte le regioni</option>
-  <option value="Europa">Solo Europa</option>
-  <option value="Nord America">Nord America</option>
-  <option value="Asia">Asia</option>
-  <option value="Medio Oriente">Medio Oriente</option>
-</select>
-
-<select id="difficultyFilter">
-  <option value="all">Qualsiasi disponibilità</option>
-  <option value="1">Solo facile</option>
-  <option value="2">Media o facile</option>
-</select>
+<input id="maxPoints" placeholder="Punti Amex disponibili">
 
 <br>
 <button onclick="searchFlights()">Dove posso andare?</button>
 
+<div id="bestDeal"></div>
 <div id="results"></div>
+
 </div>
 
 <script>
+
+function renderCard(r) {
+
+  const avgCash = (parseFloat(r.cashMin) + parseFloat(r.cashMax)) / 2;
+  const estimatedSaving = avgCash - parseFloat(r.taxes);
+
+  let badge = "";
+  if (r.opportunityScore >= 75)
+    badge = "🔥 <b style='color:green;'>Alta Opportunità</b>";
+  else if (r.opportunityScore >= 55)
+    badge = "⚖️ <b style='color:orange;'>Buona Opportunità</b>";
+  else
+    badge = "⚠️ <b style='color:red;'>Redemption Debole</b>";
+
+  return `
+    <div class="card">
+      <b>${r.destination}</b> (${r.region})<br><br>
+      💳 Programma: <b>${r.program}</b><br>
+      ✈️ ${r.points.toLocaleString()} punti compagnia<br>
+      💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
+      💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
+      💸 Risparmio stimato: <b>€${estimatedSaving.toFixed(0)}</b><br><br>
+      📊 Valore punti: ${r.estimatedValue} cent/punto<br>
+      🔥 Opportunity Score: <b>${r.opportunityScore}/100</b><br>
+      ${badge}<br>
+      ${r.mrMissing > 0 ? `⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>` : ""}
+    </div>
+  `;
+}
 
 function searchFlights() {
 
@@ -119,98 +129,68 @@ function searchFlights() {
   const maxPoints = document.getElementById("maxPoints").value;
 
   if (!maxPoints) {
-    alert("Inserisci il numero di punti disponibili");
+    alert("Inserisci i punti Amex disponibili");
     return;
   }
 
-  const resultsDiv = document.getElementById("results");
-  resultsDiv.innerHTML = "<h2>Sto cercando le migliori destinazioni...</h2>";
-
-fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
+  fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
     .then(response => response.json())
     .then(data => {
 
-      const regionFilter = document.getElementById("regionFilter").value;
-      const difficultyFilter = document.getElementById("difficultyFilter").value;
+      const sections = data.sections;
 
-      let filteredResults = data.results.filter(r => {
+      const resultsDiv = document.getElementById("results");
+      const bestDiv = document.getElementById("bestDeal");
 
-        if (regionFilter !== "all" && r.region !== regionFilter)
-          return false;
+      resultsDiv.innerHTML = "";
+      bestDiv.innerHTML = "";
 
-        if (difficultyFilter === "1" && r.difficulty !== 1)
-          return false;
+      const allRoutes = [
+        ...sections.bookable,
+        ...sections.almost,
+        ...sections.future
+      ];
 
-        if (difficultyFilter === "2" && r.difficulty > 2)
-          return false;
-
-        return true;
-      });
-
-      if (filteredResults.length === 0) {
-        resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata con questi filtri.</h2>";
-        document.getElementById("bestDeal").innerHTML = "";
+      if (allRoutes.length === 0) {
+        resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata.</h2>";
         return;
       }
 
-      // BEST DEAL
-      const best = filteredResults.reduce((prev, current) =>
-        (prev.opportunityScore > current.opportunityScore) ? prev : current
-      );
+      const best = allRoutes[0];
 
-      const bestAvg = (parseFloat(best.cashMin) + parseFloat(best.cashMax)) / 2;
-      const bestSaving = bestAvg - parseFloat(best.taxes);
-
-      document.getElementById("bestDeal").innerHTML = `
+      bestDiv.innerHTML = `
         <div class="card" style="border:2px solid gold;">
           🔥 <b>Miglior opportunità del momento</b><br><br>
           ${best.destination} (${best.region})<br>
-          💸 Risparmio stimato: €${bestSaving.toFixed(0)}<br>
-          🔥 Opportunity Score: <b>${best.opportunityScore}/100</b><br>
-${best.opportunityScore >= 70 
-    ? "🔥 <b style='color:green;'>Alta Opportunità</b>"
-    : best.opportunityScore >= 50 
-        ? "⚖️ <b style='color:orange;'>Buona Opportunità</b>"
-        : "⚠️ <b style='color:red;'>Redemption Debole</b>"
-}
+          🔥 Opportunity Score: <b>${best.opportunityScore}/100</b>
         </div>
       `;
 
-      let html = `<h2>Destinazioni possibili:</h2>`;
+      if (sections.bookable.length > 0) {
+        resultsDiv.innerHTML += `<div class="section-title">✈️ Prenotabili Ora</div>`;
+        sections.bookable.forEach(r => {
+          resultsDiv.innerHTML += renderCard(r);
+        });
+      }
 
-      filteredResults.forEach(r => {
+      if (sections.almost.length > 0) {
+        resultsDiv.innerHTML += `<div class="section-title">⚖️ Quasi Raggiungibili</div>`;
+        sections.almost.forEach(r => {
+          resultsDiv.innerHTML += renderCard(r);
+        });
+      }
 
-        const avgCash = (parseFloat(r.cashMin) + parseFloat(r.cashMax)) / 2;
-        const estimatedSaving = avgCash - parseFloat(r.taxes);
-
-        html += `
-          <div class="card">
-            <b>${r.destination}</b> (${r.region})<br><br>
-            💳 Programma: <b>${r.program}</b><br>
-            ✈️ ${r.points.toLocaleString()} punti + €${r.taxes} tasse<br><br>
-            💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
-            💸 Risparmio stimato: <b>€${estimatedSaving.toFixed(0)}</b><br>
-            📅 Periodo ideale: ${r.bestSeason}<br><br>
-            📊 Valore punti: ${r.estimatedValue} cent/punto<br>
-            🔥 Opportunity Score: <b>${r.opportunityScore}/100</b><br>
-${r.opportunityScore >= 70 
-    ? "🔥 <b style='color:green;'>Alta Opportunità</b><br>"
-    : r.opportunityScore >= 50 
-        ? "⚖️ <b style='color:orange;'>Buona Opportunità</b><br>"
-        : "⚠️ <b style='color:red;'>Redemption Debole</b><br>"
-}
-            ${r.missingPoints > 0 ? `⚠️ Ti mancano ${r.missingPoints.toLocaleString()} punti<br>` : ""}
-            🎯 Disponibilità: ${r.difficulty === 1 ? "Facile" : r.difficulty === 2 ? "Media" : "Difficile"}
-          </div>
-        `;
-      });
-
-      resultsDiv.innerHTML = html;
+      if (sections.future.length > 0) {
+        resultsDiv.innerHTML += `<div class="section-title">🌍 Obiettivi Futuri</div>`;
+        sections.future.forEach(r => {
+          resultsDiv.innerHTML += renderCard(r);
+        });
+      }
 
     })
     .catch(error => {
       console.error(error);
-      resultsDiv.innerHTML = "<h2>Errore nella ricerca</h2>";
+      document.getElementById("results").innerHTML = "<h2>Errore nella ricerca</h2>";
     });
 }
 
