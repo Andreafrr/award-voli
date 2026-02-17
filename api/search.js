@@ -138,11 +138,19 @@ module.exports = async function handler(req, res) {
         budgetScore = Math.max(5, 100 - (gapRatio * 180));
       }
 
-      const opportunityScore = (
-        valueScore * 0.6 +
-        difficultyScore * 0.15 +
-        budgetScore * 0.25
-      );
+// 🌍 Long Haul Bonus leggero
+let longHaulBonus = 0;
+
+if (route.region === "Asia") longHaulBonus = 8;
+if (route.region === "Nord America") longHaulBonus = 6;
+if (route.region === "Medio Oriente") longHaulBonus = 4;
+
+// Score finale
+const opportunityScore = (
+  valueScore * 0.6 +
+  difficultyScore * 0.15 +
+  budgetScore * 0.25
+) + longHaulBonus;
 
       return {
         ...route,
