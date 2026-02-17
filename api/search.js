@@ -147,9 +147,9 @@ if (route.region === "Medio Oriente") longHaulBonus = 4;
 
 // Score finale
 const opportunityScore = (
-  valueScore * 0.6 +
+  valueScore * 0.7 +
   difficultyScore * 0.15 +
-  budgetScore * 0.25
+  budgetScore * 0.15
 ) + longHaulBonus;
 
       return {
