@@ -33,8 +33,10 @@ h1 {
     font-weight: 700;
 }
 
-h2 {
-    margin-top: 40px;
+.section-title {
+    font-size: 20px;
+    margin-top: 50px;
+    font-weight: 600;
 }
 
 input, select {
@@ -62,11 +64,6 @@ button {
     border-radius: 14px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.06);
     text-align: left;
-}
-
-.section-title {
-    font-size: 20px;
-    margin-top: 50px;
 }
 </style>
 </head>
@@ -100,19 +97,13 @@ function renderCard(r) {
   const estimatedSaving = avgCash - parseFloat(r.taxes);
 
   let badge = "";
-let badge = "";
 
-if (r.opportunityScore >= 75)
-  badge = "🔥 <b style='color:green;'>Alta Opportunità</b>";
-else if (r.opportunityScore >= 50)
-  badge = "⚖️ <b style='color:orange;'>Buona Opportunità</b>";
-else
-  badge = "⚠️ <b style='color:red;'>Valore Debole</b>";
+  if (r.opportunityScore >= 75)
     badge = "🔥 <b style='color:green;'>Alta Opportunità</b>";
-  else if (r.opportunityScore >= 55)
+  else if (r.opportunityScore >= 50)
     badge = "⚖️ <b style='color:orange;'>Buona Opportunità</b>";
   else
-    badge = "⚠️ <b style='color:red;'>Redemption Debole</b>";
+    badge = "⚠️ <b style='color:red;'>Valore Debole</b>";
 
   return `
     <div class="card">
@@ -145,7 +136,6 @@ function searchFlights() {
     .then(data => {
 
       const sections = data.sections;
-
       const resultsDiv = document.getElementById("results");
       const bestDiv = document.getElementById("bestDeal");
 
@@ -163,7 +153,15 @@ function searchFlights() {
         return;
       }
 
-      const best = allRoutes[0];
+      // 🔥 Best Deal SOLO tra prenotabili
+      let best;
+
+      if (sections.bookable.length > 0)
+        best = sections.bookable[0];
+      else if (sections.almost.length > 0)
+        best = sections.almost[0];
+      else
+        best = sections.future[0];
 
       bestDiv.innerHTML = `
         <div class="card" style="border:2px solid gold;">
