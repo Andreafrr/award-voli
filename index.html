@@ -100,7 +100,14 @@ function renderCard(r) {
   const estimatedSaving = avgCash - parseFloat(r.taxes);
 
   let badge = "";
-  if (r.opportunityScore >= 75)
+let badge = "";
+
+if (r.opportunityScore >= 75)
+  badge = "🔥 <b style='color:green;'>Alta Opportunità</b>";
+else if (r.opportunityScore >= 50)
+  badge = "⚖️ <b style='color:orange;'>Buona Opportunità</b>";
+else
+  badge = "⚠️ <b style='color:red;'>Valore Debole</b>";
     badge = "🔥 <b style='color:green;'>Alta Opportunità</b>";
   else if (r.opportunityScore >= 55)
     badge = "⚖️ <b style='color:orange;'>Buona Opportunità</b>";
