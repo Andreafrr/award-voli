@@ -164,7 +164,13 @@ const opportunityScore = (
         gapRatio
       };
     }));
+// 🔥 Relative Value Boost
+const maxValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
 
+enriched.forEach(r => {
+  const relativeBoost = (parseFloat(r.estimatedValue) / maxValue) * 15; 
+  r.opportunityScore = Math.round(r.opportunityScore + relativeBoost);
+});
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
     // 🎯 Separazione sezioni
