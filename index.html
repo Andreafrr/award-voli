@@ -79,7 +79,7 @@ button {
   <option value="FCO">Roma (FCO)</option>
 </select>
 
-<input id="maxPoints" placeholder="MR disponibili (es. 40000)">
+<input id="maxMR" placeholder="MR disponibili (es. 40000)">
 
 <br>
 <button onclick="searchFlights()">Dove posso andare?</button>
@@ -93,14 +93,14 @@ button {
 function searchFlights() {
 
   const from = document.getElementById("from").value;
-  const maxPoints = document.getElementById("maxPoints").value;
+  const maxMR = document.getElementById("maxMR").value;
 
-  if (!maxPoints) {
+  if (!maxMR) {
     alert("Inserisci i Membership Rewards disponibili");
     return;
   }
 
-fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
+  fetch(`/api/search?from=${from}&maxMR=${maxMR}`)
     .then(res => res.json())
     .then(data => {
 
@@ -109,10 +109,10 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
 
       if (!data.results || data.results.length === 0) {
         resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata</h2>";
+        bestDiv.innerHTML = "";
         return;
       }
 
-      // Separazione sezioni
       const sections = {
         bookable: [],
         almost: [],
@@ -128,7 +128,6 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
           sections.future.push(r);
       });
 
-      // 🔥 Miglior opportunità del momento
       let best;
       if (sections.bookable.length > 0)
         best = sections.bookable[0];
@@ -203,7 +202,7 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
       resultsDiv.innerHTML = html;
 
     })
-    .catch(err => {
+    .catch(() => {
       document.getElementById("results").innerHTML = "<h2>Errore nella ricerca</h2>";
     });
 }
