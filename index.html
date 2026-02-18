@@ -115,6 +115,7 @@ function renderCard(r) {
       💸 Risparmio stimato: <b>€${estimatedSaving.toFixed(0)}</b><br><br>
       📊 Valore punti: ${r.estimatedValue} cent/punto<br>
       🔥 Opportunity Score: <b>${r.opportunityScore}/100</b><br>
+      ${r.isBestValue ? "🏆 <b>Valore più alto tra le opzioni</b><br>" : ""}
       ${badge}<br>
       ${r.mrMissing > 0 ? `⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>` : ""}
     </div>
