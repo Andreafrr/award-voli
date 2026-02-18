@@ -100,7 +100,7 @@ function searchFlights() {
     return;
   }
 
-  fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
+fetch(`/api/search?from=${from}&maxPoints=${maxPoints}`)
     .then(res => res.json())
     .then(data => {
 
