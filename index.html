@@ -8,62 +8,63 @@
 
 <style>
 body {
-    font-family: 'Inter', sans-serif;
-    background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
-    margin: 0;
-    padding: 0;
-    text-align: center;
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+  margin: 0;
+  padding: 0;
+  text-align: center;
 }
 
 .container {
-    margin-top: 60px;
-    background: white;
-    padding: 30px;
-    border-radius: 16px;
-    width: 90%;
-    max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  margin-top: 60px;
+  background: white;
+  padding: 30px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
 }
 
 h1 {
-    color: #0f172a;
-    font-size: 28px;
-    font-weight: 700;
-}
-
-.section-title {
-    font-size: 20px;
-    margin-top: 50px;
-    font-weight: 600;
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 700;
 }
 
 input, select {
-    padding: 12px;
-    margin: 8px;
-    width: 220px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
+  padding: 12px;
+  margin: 8px;
+  width: 220px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
 }
 
 button {
-    padding: 12px 24px;
-    background: #4f46e5;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    font-weight: 600;
+  padding: 12px 24px;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
 }
 
 .card {
-    background: white;
-    margin: 20px auto;
-    padding: 22px;
-    border-radius: 14px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-    text-align: left;
+  background: white;
+  margin: 20px auto;
+  padding: 22px;
+  max-width: 500px;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+  text-align: left;
+}
+
+.section-title {
+  margin-top:40px;
+  font-size:20px;
+  font-weight:600;
 }
 </style>
 </head>
@@ -71,7 +72,6 @@ button {
 <body>
 
 <div class="container">
-
 <h1>🎯 Scopri dove i tuoi punti valgono di più</h1>
 
 <select id="from">
@@ -79,48 +79,16 @@ button {
   <option value="FCO">Roma (FCO)</option>
 </select>
 
-<input id="maxPoints" placeholder="Punti Amex disponibili">
+<input id="maxPoints" placeholder="MR disponibili (es. 40000)">
 
 <br>
 <button onclick="searchFlights()">Dove posso andare?</button>
 
-<div id="bestDeal"></div>
+<div id="bestDeal" style="margin-top:30px;"></div>
 <div id="results"></div>
-
 </div>
 
 <script>
-
-function renderCard(r) {
-
-  const avgCash = (parseFloat(r.cashMin) + parseFloat(r.cashMax)) / 2;
-  const estimatedSaving = avgCash - parseFloat(r.taxes);
-
-  let badge = "";
-
-  if (r.opportunityScore >= 75)
-    badge = "🔥 <b style='color:green;'>Alta Opportunità</b>";
-  else if (r.opportunityScore >= 50)
-    badge = "⚖️ <b style='color:orange;'>Buona Opportunità</b>";
-  else
-    badge = "⚠️ <b style='color:red;'>Valore Debole</b>";
-
-  return `
-    <div class="card">
-      <b>${r.destination}</b> (${r.region})<br><br>
-      💳 Programma: <b>${r.program}</b><br>
-      ✈️ ${r.points.toLocaleString()} punti compagnia<br>
-      💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
-      💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
-      💸 Risparmio stimato: <b>€${estimatedSaving.toFixed(0)}</b><br><br>
-      📊 Valore punti: ${r.estimatedValue} cent/punto<br>
-      🔥 Opportunity Score: <b>${r.opportunityScore}/100</b><br>
-      ${r.isBestValue ? "🏆 <b>Valore più alto tra le opzioni</b><br>" : ""}
-      ${badge}<br>
-      ${r.mrMissing > 0 ? `⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>` : ""}
-    </div>
-  `;
-}
 
 function searchFlights() {
 
@@ -128,35 +96,40 @@ function searchFlights() {
   const maxPoints = document.getElementById("maxPoints").value;
 
   if (!maxPoints) {
-    alert("Inserisci i punti Amex disponibili");
+    alert("Inserisci i Membership Rewards disponibili");
     return;
   }
 
   fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
-    .then(response => response.json())
+    .then(res => res.json())
     .then(data => {
 
-      const sections = data.sections;
       const resultsDiv = document.getElementById("results");
       const bestDiv = document.getElementById("bestDeal");
 
-      resultsDiv.innerHTML = "";
-      bestDiv.innerHTML = "";
-
-      const allRoutes = [
-        ...sections.bookable,
-        ...sections.almost,
-        ...sections.future
-      ];
-
-      if (allRoutes.length === 0) {
-        resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata.</h2>";
+      if (!data.results || data.results.length === 0) {
+        resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata</h2>";
         return;
       }
 
-      // 🔥 Best Deal SOLO tra prenotabili
-      let best;
+      // Separazione sezioni
+      const sections = {
+        bookable: [],
+        almost: [],
+        future: []
+      };
 
+      data.results.forEach(r => {
+        if (r.mrMissing === 0)
+          sections.bookable.push(r);
+        else if (r.mrMissing <= 20000)
+          sections.almost.push(r);
+        else
+          sections.future.push(r);
+      });
+
+      // 🔥 Miglior opportunità del momento
+      let best;
       if (sections.bookable.length > 0)
         best = sections.bookable[0];
       else if (sections.almost.length > 0)
@@ -168,34 +141,69 @@ function searchFlights() {
         <div class="card" style="border:2px solid gold;">
           🔥 <b>Miglior opportunità del momento</b><br><br>
           ${best.destination} (${best.region})<br>
-          🔥 Opportunity Score: <b>${best.opportunityScore}/100</b>
+          🔥 Opportunity Score: ${best.opportunityScore}/100
         </div>
       `;
 
-      if (sections.bookable.length > 0) {
-        resultsDiv.innerHTML += `<div class="section-title">✈️ Prenotabili Ora</div>`;
-        sections.bookable.forEach(r => {
-          resultsDiv.innerHTML += renderCard(r);
+      let html = "";
+
+      function renderSection(title, list) {
+
+        if (list.length === 0) return;
+
+        html += `<div class="section-title">${title}</div>`;
+
+        list.forEach(r => {
+
+          const avgCash = (parseFloat(r.cashMin) + parseFloat(r.cashMax)) / 2;
+          const estimatedSaving = avgCash - parseFloat(r.taxes);
+
+          let ratingLabel = "";
+          if (r.opportunityScore >= 75)
+            ratingLabel = "🔥 <b style='color:green;'>Alta Opportunità</b>";
+          else if (r.opportunityScore >= 55)
+            ratingLabel = "⚖️ <b style='color:orange;'>Buona Opportunità</b>";
+          else
+            ratingLabel = "⚠️ <b style='color:red;'>Valore Debole</b>";
+
+          html += `
+            <div class="card">
+              <b>${r.destination}</b> (${r.region})<br><br>
+
+              💳 Programma: <b>${r.program}</b><br>
+              ✈️ ${r.points.toLocaleString()} punti compagnia<br>
+              💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
+
+              💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
+              💸 Risparmio stimato: €${estimatedSaving.toFixed(0)}<br><br>
+
+              📊 Valore punti: ${r.estimatedValue} cent/punto<br>
+              🔥 Opportunity Score: ${r.opportunityScore}/100<br>
+
+              ${r.isBestValue ? "🏆 <b>Valore più alto tra le opzioni</b><br>" : ""}
+
+              ${r.relativeLoss > 0 
+                ? `💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>` 
+                : ""}
+
+              ${ratingLabel}<br>
+
+              ${r.mrMissing > 0 
+                ? `⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>` 
+                : "✈️ Prenotabile Ora<br>"}
+            </div>
+          `;
         });
       }
 
-      if (sections.almost.length > 0) {
-        resultsDiv.innerHTML += `<div class="section-title">⚖️ Quasi Raggiungibili</div>`;
-        sections.almost.forEach(r => {
-          resultsDiv.innerHTML += renderCard(r);
-        });
-      }
+      renderSection("✈️ Prenotabili Ora", sections.bookable);
+      renderSection("⚖️ Quasi Raggiungibili", sections.almost);
+      renderSection("🌍 Obiettivi Futuri", sections.future);
 
-      if (sections.future.length > 0) {
-        resultsDiv.innerHTML += `<div class="section-title">🌍 Obiettivi Futuri</div>`;
-        sections.future.forEach(r => {
-          resultsDiv.innerHTML += renderCard(r);
-        });
-      }
+      resultsDiv.innerHTML = html;
 
     })
-    .catch(error => {
-      console.error(error);
+    .catch(err => {
       document.getElementById("results").innerHTML = "<h2>Errore nella ricerca</h2>";
     });
 }
