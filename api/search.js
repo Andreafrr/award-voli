@@ -171,6 +171,12 @@ enriched.forEach(r => {
   const relativeBoost = (parseFloat(r.estimatedValue) / maxValue) * 15; 
   r.opportunityScore = Math.round(r.opportunityScore + relativeBoost);
 });
+    // 🏆 Flag miglior valore assoluto
+const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
+
+enriched.forEach(r => {
+  r.isBestValue = parseFloat(r.estimatedValue) === bestValue;
+});
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
     // 🎯 Separazione sezioni
