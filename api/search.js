@@ -177,6 +177,13 @@ const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
 enriched.forEach(r => {
   r.isBestValue = parseFloat(r.estimatedValue) === bestValue;
 });
+    // 💸 Calcolo perdita rispetto al miglior valore
+const absoluteBestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
+
+enriched.forEach(r => {
+  const valueDiff = absoluteBestValue - parseFloat(r.estimatedValue);
+  r.relativeLoss = Math.max(0, (valueDiff / 100) * parsedMaxPoints).toFixed(0);
+});
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
     // 🎯 Separazione sezioni
