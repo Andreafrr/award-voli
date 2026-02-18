@@ -4,6 +4,7 @@ const { routes } = require("../data/routes.js");
 const cache = {};
 const CACHE_TTL = 30 * 60 * 1000; // 30 minuti
 
+// 🔁 Conversioni Amex → Programmi
 function getMRRequired(program, airlinePoints) {
   const conversionRates = {
     "Avios (Iberia / BA)": 5 / 4,
@@ -31,14 +32,18 @@ module.exports = async function handler(req, res) {
 
     const filtered = routes.filter(r => r.from === from);
 
+    // 🔐 Token Amadeus
     const key = process.env.AMADEUS_API_KEY;
     const secret = process.env.AMADEUS_API_SECRET;
 
-    const tokenResponse = await fetch("https://test.api.amadeus.com/v1/security/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `grant_type=client_credentials&client_id=${key}&client_secret=${secret}`
-    });
+    const tokenResponse = await fetch(
+      "https://test.api.amadeus.com/v1/security/oauth2/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `grant_type=client_credentials&client_id=${key}&client_secret=${secret}`
+      }
+    );
 
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
@@ -47,6 +52,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "Token Amadeus non ottenuto" });
     }
 
+    // 🔎 Funzione prezzi cash con cache
     async function getCashRange(origin, destination) {
 
       const cacheKey = `${origin}-${destination}`;
@@ -69,7 +75,7 @@ module.exports = async function handler(req, res) {
 
         const flightResponse = await fetch(
           `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${date}&adults=1&max=3`,
-          { headers: { "Authorization": `Bearer ${accessToken}` } }
+          { headers: { Authorization: `Bearer ${accessToken}` } }
         );
 
         const flightData = await flightResponse.json();
@@ -102,6 +108,7 @@ module.exports = async function handler(req, res) {
       return summary;
     }
 
+    // 🔥 Arricchimento rotte
     const enriched = await Promise.all(filtered.map(async (route) => {
 
       const cashData = await getCashRange(route.from, route.destinationCode);
@@ -122,35 +129,33 @@ module.exports = async function handler(req, res) {
 
       const value = ((cashData.average - route.taxes) / route.points) * 100;
 
-      // Value score continuo
-      let valueScore = Math.min(100, value * 50);
+      // 🎯 Value score continuo
+      let valueScore = Math.min(100, value * 60);
 
-      // Difficulty
+      // 🎯 Difficulty
       let difficultyScore = 70;
       if (route.difficulty === 1) difficultyScore = 100;
       if (route.difficulty === 2) difficultyScore = 70;
       if (route.difficulty === 3) difficultyScore = 40;
 
-      // Budget penalty AGGRESSIVO
+      // 🎯 Budget penalty aggressivo
       let budgetScore = 100;
-
       if (mrMissing > 0) {
         budgetScore = Math.max(5, 100 - (gapRatio * 180));
       }
 
-// 🌍 Long Haul Bonus leggero
-let longHaulBonus = 0;
+      // 🌍 Long haul bonus leggero
+      let longHaulBonus = 0;
+      if (route.region === "Asia") longHaulBonus = 8;
+      if (route.region === "Nord America") longHaulBonus = 6;
+      if (route.region === "Medio Oriente") longHaulBonus = 4;
 
-if (route.region === "Asia") longHaulBonus = 8;
-if (route.region === "Nord America") longHaulBonus = 6;
-if (route.region === "Medio Oriente") longHaulBonus = 4;
-
-// Score finale
-const opportunityScore = (
-  valueScore * 0.7 +
-  difficultyScore * 0.15 +
-  budgetScore * 0.15
-) + longHaulBonus;
+      // 🔥 Score finale
+      let opportunityScore = (
+        valueScore * 0.7 +
+        difficultyScore * 0.15 +
+        budgetScore * 0.15
+      ) + longHaulBonus;
 
       return {
         ...route,
@@ -164,29 +169,21 @@ const opportunityScore = (
         gapRatio
       };
     }));
-// 🔥 Relative Value Boost
-const maxValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
 
-enriched.forEach(r => {
-  const relativeBoost = (parseFloat(r.estimatedValue) / maxValue) * 15; 
-  r.opportunityScore = Math.round(r.opportunityScore + relativeBoost);
-});
-    // 🏆 Flag miglior valore assoluto
-const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
+    // 🏆 Miglior valore assoluto
+    const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
 
-enriched.forEach(r => {
-  r.isBestValue = parseFloat(r.estimatedValue) === bestValue;
-});
-    // 💸 Calcolo perdita rispetto al miglior valore
-const absoluteBestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
+    enriched.forEach(r => {
+      r.isBestValue = parseFloat(r.estimatedValue) === bestValue;
 
-enriched.forEach(r => {
-  const valueDiff = absoluteBestValue - parseFloat(r.estimatedValue);
-  r.relativeLoss = Math.max(0, (valueDiff / 100) * parsedMaxMR).toFixed(0);
-});
+      const valueDiff = bestValue - parseFloat(r.estimatedValue);
+      r.relativeLoss = Math.max(0, (valueDiff / 100) * parsedMaxMR).toFixed(0);
+    });
+
+    // Ordine per score
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
-    // 🎯 Separazione sezioni
+    // 📊 Sezioni
     const bookable = enriched.filter(r => r.mrMissing === 0);
     const almost = enriched.filter(r => r.mrMissing > 0 && r.gapRatio <= 0.25);
     const future = enriched.filter(r => r.gapRatio > 0.25);
