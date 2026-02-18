@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Comparatore Voli Premio</title>
+
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
 <style>
@@ -28,7 +29,6 @@ body {
 }
 
 h1 {
-  color: #0f172a;
   font-size: 28px;
   font-weight: 700;
 }
@@ -79,13 +79,14 @@ button {
   <option value="FCO">Roma (FCO)</option>
 </select>
 
-<input id="maxMR" placeholder="MR disponibili (es. 40000)">
+<input id="maxPoints" placeholder="MR disponibili (es. 40000)">
 
 <br>
 <button onclick="searchFlights()">Dove posso andare?</button>
 
 <div id="bestDeal" style="margin-top:30px;"></div>
 <div id="results"></div>
+
 </div>
 
 <script>
@@ -93,62 +94,45 @@ button {
 function searchFlights() {
 
   const from = document.getElementById("from").value;
-  const maxMR = document.getElementById("maxMR").value;
+  const maxPoints = document.getElementById("maxPoints").value;
 
-  if (!maxMR) {
+  if (!maxPoints) {
     alert("Inserisci i Membership Rewards disponibili");
     return;
   }
 
-  fetch(`/api/search?from=${from}&maxMR=${maxMR}`)
+  fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
     .then(res => res.json())
     .then(data => {
 
       const resultsDiv = document.getElementById("results");
       const bestDiv = document.getElementById("bestDeal");
 
-      if (!data.results || data.results.length === 0) {
+      if (!data.sections) {
         resultsDiv.innerHTML = "<h2>Nessuna destinazione trovata</h2>";
-        bestDiv.innerHTML = "";
         return;
       }
 
-      const sections = {
-        bookable: [],
-        almost: [],
-        future: []
-      };
+      const { bookable, almost, future } = data.sections;
 
-      data.results.forEach(r => {
-        if (r.mrMissing === 0)
-          sections.bookable.push(r);
-        else if (r.mrMissing <= 20000)
-          sections.almost.push(r);
-        else
-          sections.future.push(r);
-      });
+      // 🔥 Miglior opportunità
+      let best = bookable[0] || almost[0] || future[0];
 
-      let best;
-      if (sections.bookable.length > 0)
-        best = sections.bookable[0];
-      else if (sections.almost.length > 0)
-        best = sections.almost[0];
-      else
-        best = sections.future[0];
-
-      bestDiv.innerHTML = `
-        <div class="card" style="border:2px solid gold;">
-          🔥 <b>Miglior opportunità del momento</b><br><br>
-          ${best.destination} (${best.region})<br>
-          🔥 Opportunity Score: ${best.opportunityScore}/100
-        </div>
-      `;
+      if (best) {
+        bestDiv.innerHTML = `
+          <div class="card" style="border:2px solid gold;">
+            🔥 <b>Miglior opportunità del momento</b><br><br>
+            ${best.destination} (${best.region})<br>
+            🔥 Opportunity Score: ${best.opportunityScore}/100
+          </div>
+        `;
+      }
 
       let html = "";
 
       function renderSection(title, list) {
 
-        if (list.length === 0) return;
+        if (!list || list.length === 0) return;
 
         html += `<div class="section-title">${title}</div>`;
 
@@ -195,9 +179,9 @@ function searchFlights() {
         });
       }
 
-      renderSection("✈️ Prenotabili Ora", sections.bookable);
-      renderSection("⚖️ Quasi Raggiungibili", sections.almost);
-      renderSection("🌍 Obiettivi Futuri", sections.future);
+      renderSection("✈️ Prenotabili Ora", bookable);
+      renderSection("⚖️ Quasi Raggiungibili", almost);
+      renderSection("🌍 Obiettivi Futuri", future);
 
       resultsDiv.innerHTML = html;
 
