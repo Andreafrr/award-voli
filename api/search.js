@@ -1,4 +1,4 @@
-const { routes } = require("../data/routes.js");
+const { routes } = require("../data/routes.js")
 
 // Cache in memoria
 const cache = {};
@@ -172,6 +172,11 @@ module.exports = async function handler(req, res) {
 
     // 🏆 Miglior valore assoluto
     const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
+    // 📊 Percentuale valore catturato
+enriched.forEach(r => {
+  const best = bestValue || 1;
+  r.valuePercent = Math.round((parseFloat(r.estimatedValue) / best) * 100);
+});
 
     enriched.forEach(r => {
       r.isBestValue = parseFloat(r.estimatedValue) === bestValue;
