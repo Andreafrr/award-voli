@@ -1,4 +1,5 @@
-const { routes } = require("../data/routes.js")
+const { routes } = require("../data/routes.js");
+const fetch = require("node-fetch"); // ✅ FIX fondamentale per Vercel
 
 // Cache in memoria
 const cache = {};
@@ -19,9 +20,7 @@ function getMRRequired(program, airlinePoints) {
 }
 
 module.exports = async function handler(req, res) {
-
   try {
-
     const { from, maxMR } = req.query;
 
     if (!from || !maxMR) {
@@ -54,7 +53,6 @@ module.exports = async function handler(req, res) {
 
     // 🔎 Funzione prezzi cash con cache
     async function getCashRange(origin, destination) {
-
       const cacheKey = `${origin}-${destination}`;
       const now = Date.now();
 
@@ -72,7 +70,6 @@ module.exports = async function handler(req, res) {
       }
 
       const pricePromises = dates.map(async (date) => {
-
         const flightResponse = await fetch(
           `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${date}&adults=1&max=3`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -109,88 +106,102 @@ module.exports = async function handler(req, res) {
     }
 
     // 🔥 Arricchimento rotte
-    const enriched = await Promise.all(filtered.map(async (route) => {
+    const enriched = await Promise.all(
+      filtered.map(async (route) => {
+        const cashData = await getCashRange(route.from, route.destinationCode);
 
-      const cashData = await getCashRange(route.from, route.destinationCode);
+        const mrRequired = getMRRequired(route.program, route.points);
+        const mrMissing = mrRequired - parsedMaxMR;
+        const gapRatio = mrMissing > 0 ? mrMissing / mrRequired : 0;
 
-      const mrRequired = getMRRequired(route.program, route.points);
-      const mrMissing = mrRequired - parsedMaxMR;
-      const gapRatio = mrMissing > 0 ? mrMissing / mrRequired : 0;
+        if (!cashData) {
+          return {
+            ...route,
+            opportunityScore: 0,
+            mrRequired,
+            mrMissing: mrMissing > 0 ? mrMissing : 0,
+            gapRatio,
+            estimatedValue: "0"
+          };
+        }
 
-      if (!cashData) {
+        const value =
+          ((cashData.average - route.taxes) / route.points) * 100;
+
+        // 🎯 Value score continuo
+        let valueScore = Math.min(100, value * 60);
+
+        // 🎯 Difficulty
+        let difficultyScore = 70;
+        if (route.difficulty === 1) difficultyScore = 100;
+        if (route.difficulty === 2) difficultyScore = 70;
+        if (route.difficulty === 3) difficultyScore = 40;
+
+        // 🎯 Budget penalty aggressivo
+        let budgetScore = 100;
+        if (mrMissing > 0) {
+          budgetScore = Math.max(5, 100 - (gapRatio * 180));
+        }
+
+        // 🌍 Long haul bonus
+        let longHaulBonus = 0;
+        if (route.region === "Asia") longHaulBonus = 8;
+        if (route.region === "Nord America") longHaulBonus = 6;
+        if (route.region === "Medio Oriente") longHaulBonus = 4;
+
+        // 🔥 Score finale
+        let opportunityScore =
+          valueScore * 0.7 +
+          difficultyScore * 0.15 +
+          budgetScore * 0.15 +
+          longHaulBonus;
+
         return {
           ...route,
-          opportunityScore: 0,
+          cashMin: cashData.min.toFixed(2),
+          cashMax: cashData.max.toFixed(2),
+          cashAverage: cashData.average.toFixed(2),
+          estimatedValue: value.toFixed(2),
+          opportunityScore: Math.round(opportunityScore),
           mrRequired,
           mrMissing: mrMissing > 0 ? mrMissing : 0,
           gapRatio
         };
-      }
+      })
+    );
 
-      const value = ((cashData.average - route.taxes) / route.points) * 100;
+    // 🏆 Miglior valore assoluto (robusto)
+    const bestValue = enriched.length
+      ? Math.max(...enriched.map(r => parseFloat(r.estimatedValue)))
+      : 0;
 
-      // 🎯 Value score continuo
-      let valueScore = Math.min(100, value * 60);
-
-      // 🎯 Difficulty
-      let difficultyScore = 70;
-      if (route.difficulty === 1) difficultyScore = 100;
-      if (route.difficulty === 2) difficultyScore = 70;
-      if (route.difficulty === 3) difficultyScore = 40;
-
-      // 🎯 Budget penalty aggressivo
-      let budgetScore = 100;
-      if (mrMissing > 0) {
-        budgetScore = Math.max(5, 100 - (gapRatio * 180));
-      }
-
-      // 🌍 Long haul bonus leggero
-      let longHaulBonus = 0;
-      if (route.region === "Asia") longHaulBonus = 8;
-      if (route.region === "Nord America") longHaulBonus = 6;
-      if (route.region === "Medio Oriente") longHaulBonus = 4;
-
-      // 🔥 Score finale
-      let opportunityScore = (
-        valueScore * 0.7 +
-        difficultyScore * 0.15 +
-        budgetScore * 0.15
-      ) + longHaulBonus;
-
-      return {
-        ...route,
-        cashMin: cashData.min.toFixed(2),
-        cashMax: cashData.max.toFixed(2),
-        cashAverage: cashData.average.toFixed(2),
-        estimatedValue: value.toFixed(2),
-        opportunityScore: Math.round(opportunityScore),
-        mrRequired,
-        mrMissing: mrMissing > 0 ? mrMissing : 0,
-        gapRatio
-      };
-    }));
-
-    // 🏆 Miglior valore assoluto
-    const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
     // 📊 Percentuale valore catturato
-enriched.forEach(r => {
-  const best = bestValue || 1;
-  r.valuePercent = Math.round((parseFloat(r.estimatedValue) / best) * 100);
-});
+    enriched.forEach(r => {
+      const best = bestValue || 1;
+      r.valuePercent = Math.round(
+        (parseFloat(r.estimatedValue) / best) * 100
+      );
+    });
 
+    // 💸 perdita relativa
     enriched.forEach(r => {
       r.isBestValue = parseFloat(r.estimatedValue) === bestValue;
 
       const valueDiff = bestValue - parseFloat(r.estimatedValue);
-      r.relativeLoss = Math.max(0, (valueDiff / 100) * parsedMaxMR).toFixed(0);
+      r.relativeLoss = Math.max(
+        0,
+        (valueDiff / 100) * parsedMaxMR
+      ).toFixed(0);
     });
 
-    // Ordine per score
+    // Ordine finale
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
     // 📊 Sezioni
     const bookable = enriched.filter(r => r.mrMissing === 0);
-    const almost = enriched.filter(r => r.mrMissing > 0 && r.gapRatio <= 0.25);
+    const almost = enriched.filter(
+      r => r.mrMissing > 0 && r.gapRatio <= 0.25
+    );
     const future = enriched.filter(r => r.gapRatio > 0.25);
 
     return res.status(200).json({
@@ -204,7 +215,6 @@ enriched.forEach(r => {
     });
 
   } catch (error) {
-
     return res.status(500).json({
       error: "Errore interno server",
       details: error.message
