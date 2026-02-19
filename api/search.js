@@ -1,5 +1,5 @@
 const { routes } = require("../data/routes.js");
-const fetch = require("node-fetch"); // ✅ FIX fondamentale per Vercel
+
 
 // Cache in memoria
 const cache = {};
