@@ -75,21 +75,6 @@ font-size:20px;
 font-weight:600;
 }
 
-.value-bar-container{
-margin-top:8px;
-background:#e5e7eb;
-border-radius:6px;
-height:8px;
-width:100%;
-overflow:hidden;
-}
-
-.value-bar{
-height:8px;
-background:#4f46e5;
-border-radius:6px;
-}
-
 </style>
 
 </head>
@@ -115,12 +100,11 @@ border-radius:6px;
 
 <input id="maxPoints" placeholder="MR disponibili (es. 40000)">
 
-<input id="monthlyMR" placeholder="MR medi accumulati al mese (es. 12000)">
-
 <br>
 
 <button onclick="searchFlights()">Dove posso andare?</button>
 
+<div id="sweetSpots"></div>
 <div id="bestAbsolute"></div>
 <div id="bestToday"></div>
 <div id="results"></div>
@@ -129,32 +113,11 @@ border-radius:6px;
 
 <script>
 
-function safeNumber(n){
-if(!n||isNaN(n)) return 0
-return Number(n)
-}
-
-function getRating(value){
-
-if(value>=2.5) return "🏆 Redemption eccezionale"
-if(value>=1.2) return "🔥 Ottima redemption"
-if(value>=0.6) return "⭐ Buona redemption"
-if(value>=0.3) return "👍 Valore discreto"
-return "⚠️ Valore scarso"
-
-}
-
 function searchFlights(){
 
 const from=document.getElementById("from").value
 const cabin=document.getElementById("cabin").value
 const maxPoints=document.getElementById("maxPoints").value
-const monthlyMR=parseInt(document.getElementById("monthlyMR").value||0)
-
-if(!maxPoints){
-alert("Inserisci i Membership Rewards disponibili")
-return
-}
 
 fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
 .then(res=>res.json())
@@ -163,28 +126,15 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
 const resultsDiv=document.getElementById("results")
 const bestAbsoluteDiv=document.getElementById("bestAbsolute")
 const bestTodayDiv=document.getElementById("bestToday")
-
-if(!data.sections){
-resultsDiv.innerHTML="<h2>Nessuna destinazione trovata</h2>"
-return
-}
+const sweetSpotsDiv=document.getElementById("sweetSpots")
 
 let {bookable,almost,future}=data.sections
 
 let all=[...bookable,...almost,...future]
 
-if(cabin!=="all"){
-bookable=bookable.filter(r=>r.cabin===cabin)
-almost=almost.filter(r=>r.cabin===cabin)
-future=future.filter(r=>r.cabin===cabin)
-all=all.filter(r=>r.cabin===cabin)
-}
-
 let bestValue=all.find(r=>r.isBestValue)
 
 if(bestValue){
-
-const percent=safeNumber(bestValue.valuePercent)
 
 bestAbsoluteDiv.innerHTML=`
 
@@ -197,12 +147,6 @@ ${bestValue.destination} (${bestValue.region})<br>
 💺 ${bestValue.cabin}<br>
 
 📊 Valore punti: ${bestValue.estimatedValue} cent/punto<br>
-
-📈 Massimizzi il <b>${percent}%</b> del valore possibile
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${percent}%"></div>
-</div>
 
 💳 Richiede ${bestValue.mrRequired.toLocaleString()} MR
 
@@ -226,13 +170,40 @@ ${bestToday.destination} (${bestToday.region})<br>
 
 💺 ${bestToday.cabin}<br>
 
-📊 Valore punti: ${bestToday.estimatedValue} cent/punto<br>
-
-🔥 Opportunity Score: ${bestToday.opportunityScore}/100
+📊 ${bestToday.estimatedValue} cent/punto
 
 </div>
 
 `
+
+}
+
+const sweetSpots=data.sweetSpots
+
+if(sweetSpots&&sweetSpots.length>0){
+
+let html=`
+
+<div class="card highlight">
+
+🔥 <b>Sweet Spots</b><br><br>
+
+`
+
+sweetSpots.forEach(s=>{
+
+html+=`
+
+${s.destination} (${s.region}) — ${s.cabin}<br>
+📊 ${s.estimatedValue} cent/punto<br><br>
+
+`
+
+})
+
+html+=`</div>`
+
+sweetSpotsDiv.innerHTML=html
 
 }
 
@@ -245,28 +216,6 @@ if(!list||list.length===0) return
 html+=`<div class="section-title">${title}</div>`
 
 list.forEach(r=>{
-
-const min=safeNumber(r.cashMin)
-const max=safeNumber(r.cashMax)
-
-let priceLabel="Prezzo non disponibile"
-
-if(min>0) priceLabel=`€${min} - €${max}`
-
-const avg=(min+max)/2
-const saving=Math.max(0,avg-safeNumber(r.taxes))
-
-const percent=safeNumber(r.valuePercent)
-
-const value=parseFloat(r.estimatedValue)
-
-const rating=getRating(value)
-
-let months=""
-
-if(r.mrMissing>0 && monthlyMR>0){
-months=`⏳ Circa ${Math.ceil(r.mrMissing/monthlyMR)} mesi di accumulo<br>`
-}
 
 html+=`
 
@@ -282,27 +231,9 @@ html+=`
 
 💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
 
-💰 Prezzo medio cash: ${priceLabel}<br>
-
-💸 Risparmio stimato: €${saving.toFixed(0)}<br><br>
-
 📊 Valore punti: ${r.estimatedValue} cent/punto<br>
 
-${rating}<br>
-
-📊 Massimizzi circa il <b>${percent}%</b> del valore massimo
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${percent}%"></div>
-</div>
-
-🔥 Opportunity Score: ${r.opportunityScore}/100<br>
-
-${r.isBestValue?"🏆 <b>Valore più alto tra le opzioni</b><br>":""}
-
-${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
-
-${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>${months}`:"✈️ Prenotabile Ora<br>"}
+🔥 Opportunity Score: ${r.opportunityScore}/100
 
 </div>
 
@@ -317,12 +248,6 @@ renderSection("⚖️ Quasi Raggiungibili",almost)
 renderSection("🌍 Obiettivi Futuri",future)
 
 resultsDiv.innerHTML=html
-
-})
-
-.catch(()=>{
-
-document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>"
 
 })
 
