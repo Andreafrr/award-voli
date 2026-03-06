@@ -67,6 +67,7 @@ if(cabin==="First") travelClass="FIRST"
 if(cabin==="Premium Economy") travelClass="PREMIUM_ECONOMY"
 
 const today=new Date()
+
 const offsets=[20,40,60]
 
 const prices=await Promise.all(offsets.map(async(days)=>{
@@ -191,6 +192,8 @@ const bookable=enriched.filter(r=>r.mrMissing===0)
 const almost=enriched.filter(r=>r.mrMissing>0&&r.gapRatio<=0.25)
 const future=enriched.filter(r=>r.gapRatio>0.25)
 
+const possibleDestinations=enriched.filter(r=>r.mrRequired<=parsedMaxMR)
+
 const sweetSpots=enriched
 .filter(r=>parseFloat(r.estimatedValue)>=1.2)
 .sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))
@@ -206,6 +209,8 @@ bookable,
 almost,
 future
 },
+
+possibleDestinations,
 
 bestRedemptionToday: enriched[0],
 
