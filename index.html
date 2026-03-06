@@ -122,7 +122,7 @@ border-radius:6px;
 <button onclick="searchFlights()">Dove posso andare?</button>
 
 <div id="bestAbsolute"></div>
-<div id="bestDeal"></div>
+<div id="bestToday"></div>
 <div id="results"></div>
 
 </div>
@@ -130,51 +130,61 @@ border-radius:6px;
 <script>
 
 function safeNumber(n){
-if(!n || isNaN(n)) return 0;
-return Number(n);
+if(!n||isNaN(n)) return 0
+return Number(n)
+}
+
+function getRating(value){
+
+if(value>=2.5) return "🏆 Redemption eccezionale"
+if(value>=1.2) return "🔥 Ottima redemption"
+if(value>=0.6) return "⭐ Buona redemption"
+if(value>=0.3) return "👍 Valore discreto"
+return "⚠️ Valore scarso"
+
 }
 
 function searchFlights(){
 
-const from=document.getElementById("from").value;
-const cabin=document.getElementById("cabin").value;
-const maxPoints=document.getElementById("maxPoints").value;
-const monthlyMR=parseInt(document.getElementById("monthlyMR").value||0);
+const from=document.getElementById("from").value
+const cabin=document.getElementById("cabin").value
+const maxPoints=document.getElementById("maxPoints").value
+const monthlyMR=parseInt(document.getElementById("monthlyMR").value||0)
 
 if(!maxPoints){
-alert("Inserisci i Membership Rewards disponibili");
-return;
+alert("Inserisci i Membership Rewards disponibili")
+return
 }
 
 fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
 .then(res=>res.json())
 .then(data=>{
 
-const resultsDiv=document.getElementById("results");
-const bestDiv=document.getElementById("bestDeal");
-const bestAbsoluteDiv=document.getElementById("bestAbsolute");
+const resultsDiv=document.getElementById("results")
+const bestAbsoluteDiv=document.getElementById("bestAbsolute")
+const bestTodayDiv=document.getElementById("bestToday")
 
 if(!data.sections){
-resultsDiv.innerHTML="<h2>Nessuna destinazione trovata</h2>";
-return;
+resultsDiv.innerHTML="<h2>Nessuna destinazione trovata</h2>"
+return
 }
 
-let {bookable,almost,future}=data.sections;
+let {bookable,almost,future}=data.sections
 
-let all=[...bookable,...almost,...future];
+let all=[...bookable,...almost,...future]
 
 if(cabin!=="all"){
-bookable=bookable.filter(r=>r.cabin===cabin);
-almost=almost.filter(r=>r.cabin===cabin);
-future=future.filter(r=>r.cabin===cabin);
-all=all.filter(r=>r.cabin===cabin);
+bookable=bookable.filter(r=>r.cabin===cabin)
+almost=almost.filter(r=>r.cabin===cabin)
+future=future.filter(r=>r.cabin===cabin)
+all=all.filter(r=>r.cabin===cabin)
 }
 
-let bestValue=all.find(r=>r.isBestValue);
+let bestValue=all.find(r=>r.isBestValue)
 
 if(bestValue){
 
-const percent=safeNumber(bestValue.valuePercent);
+const percent=safeNumber(bestValue.valuePercent)
 
 bestAbsoluteDiv.innerHTML=`
 
@@ -198,79 +208,64 @@ ${bestValue.destination} (${bestValue.region})<br>
 
 </div>
 
-`;
+`
 
 }
 
-let bestNow=bookable[0];
+const bestToday=data.bestRedemptionToday
 
-if(bestNow){
+if(bestToday){
 
-const percent=safeNumber(bestNow.valuePercent);
-
-bestDiv.innerHTML=`
+bestTodayDiv.innerHTML=`
 
 <div class="card highlight">
 
-🔥 <b>Miglior opportunità prenotabile ora</b><br><br>
+🔥 <b>Best Redemption Today</b><br><br>
 
-${bestNow.destination} (${bestNow.region})<br>
+${bestToday.destination} (${bestToday.region})<br>
 
-💺 ${bestNow.cabin}<br>
+💺 ${bestToday.cabin}<br>
 
-🔥 Opportunity Score: ${bestNow.opportunityScore}/100<br>
+📊 Valore punti: ${bestToday.estimatedValue} cent/punto<br>
 
-📊 Massimizzi circa il <b>${percent}%</b> del valore possibile
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${percent}%"></div>
-</div>
+🔥 Opportunity Score: ${bestToday.opportunityScore}/100
 
 </div>
 
-`;
+`
 
 }
 
-let html="";
+let html=""
 
 function renderSection(title,list){
 
-if(!list||list.length===0) return;
+if(!list||list.length===0) return
 
-html+=`<div class="section-title">${title}</div>`;
+html+=`<div class="section-title">${title}</div>`
 
 list.forEach(r=>{
 
-const min=safeNumber(r.cashMin);
-const max=safeNumber(r.cashMax);
+const min=safeNumber(r.cashMin)
+const max=safeNumber(r.cashMax)
 
-let priceLabel="Prezzo non disponibile";
+let priceLabel="Prezzo non disponibile"
 
-if(min>0) priceLabel=`€${min} - €${max}`;
+if(min>0) priceLabel=`€${min} - €${max}`
 
-const avg=(min+max)/2;
-const saving=avg-safeNumber(r.taxes);
+const avg=(min+max)/2
+const saving=Math.max(0,avg-safeNumber(r.taxes))
 
-const percent=safeNumber(r.valuePercent);
+const percent=safeNumber(r.valuePercent)
 
-let rating="";
+const value=parseFloat(r.estimatedValue)
 
-const value=parseFloat(r.estimatedValue);
+const rating=getRating(value)
 
-if(value>=3)
-rating="🔥 Redemption eccellente";
-else if(value>=2)
-rating="⭐ Ottima redemption";
-else if(value>=1)
-rating="👍 Buona redemption";
-else
-rating="⚠️ Valore debole";
-
-let months="";
+let months=""
 
 if(r.mrMissing>0 && monthlyMR>0){
-months=`⏳ Circa ${Math.ceil(r.mrMissing/monthlyMR)} mesi di accumulo<br>`;
+months=`⏳ Circa ${Math.ceil(r.mrMissing/monthlyMR)} mesi di accumulo<br>`
 }
 
 html+=`
@@ -311,25 +306,25 @@ ${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>${month
 
 </div>
 
-`;
+`
 
-});
+})
 
 }
 
-renderSection("✈️ Prenotabili Ora",bookable);
-renderSection("⚖️ Quasi Raggiungibili",almost);
-renderSection("🌍 Obiettivi Futuri",future);
+renderSection("✈️ Prenotabili Ora",bookable)
+renderSection("⚖️ Quasi Raggiungibili",almost)
+renderSection("🌍 Obiettivi Futuri",future)
 
-resultsDiv.innerHTML=html;
+resultsDiv.innerHTML=html
 
 })
 
 .catch(()=>{
 
-document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>";
+document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>"
 
-});
+})
 
 }
 
