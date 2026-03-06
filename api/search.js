@@ -1,10 +1,10 @@
 const { routes } = require("../data/routes.js")
 
-// Cache memoria
+// cache memoria
 const cache = {}
 const CACHE_TTL = 30 * 60 * 1000
 
-// Conversione MR → programmi
+// conversione MR
 function getMRRequired(program, airlinePoints){
 
 const rates={
@@ -34,10 +34,10 @@ const parsedMaxMR=parseInt(maxMR)
 
 const filtered=routes.filter(r=>r.from===from)
 
+// token Amadeus
 const key=process.env.AMADEUS_API_KEY
 const secret=process.env.AMADEUS_API_SECRET
 
-// token Amadeus
 const tokenResponse=await fetch(
 "https://test.api.amadeus.com/v1/security/oauth2/token",
 {
@@ -54,29 +54,36 @@ if(!accessToken){
 return res.status(500).json({error:"Token Amadeus non ottenuto"})
 }
 
-// funzione prezzi
-async function getCashRange(origin,destination){
+// funzione prezzo cash
+async function getCashRange(origin,destination,cabin){
 
-const cacheKey=`${origin}-${destination}`
+const cacheKey=`${origin}-${destination}-${cabin}`
 const now=Date.now()
 
 if(cache[cacheKey]&&(now-cache[cacheKey].timestamp<CACHE_TTL)){
 return cache[cacheKey].data
 }
 
+// cabina Amadeus
+let travelClass="ECONOMY"
+
+if(cabin==="Business") travelClass="BUSINESS"
+if(cabin==="First") travelClass="FIRST"
+if(cabin==="Premium Economy") travelClass="PREMIUM_ECONOMY"
+
+// scan più date
 const today=new Date()
-const dates=[]
+const offsets=[20,40,60]
 
-for(let i=1;i<=2;i++){
+const prices=await Promise.all(offsets.map(async(days)=>{
+
 const future=new Date(today)
-future.setDate(today.getDate()+i*20)
-dates.push(future.toISOString().split("T")[0])
-}
+future.setDate(today.getDate()+days)
 
-const prices=await Promise.all(dates.map(async(date)=>{
+const date=future.toISOString().split("T")[0]
 
 const response=await fetch(
-`https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${date}&adults=1&max=3`,
+`https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${date}&adults=1&max=3&travelClass=${travelClass}`,
 {headers:{Authorization:`Bearer ${accessToken}`}}
 )
 
@@ -102,18 +109,22 @@ const min=Math.min(...valid)
 const max=Math.max(...valid)
 const avg=valid.reduce((a,b)=>a+b,0)/valid.length
 
-const summary={min,max,average:avg}
+const result={min,max,average:avg}
 
-cache[cacheKey]={timestamp:now,data:summary}
+cache[cacheKey]={timestamp:now,data:result}
 
-return summary
+return result
 
 }
 
 // arricchimento rotte
 const enriched=await Promise.all(filtered.map(async(route)=>{
 
-const cashData=await getCashRange(route.from,route.destinationCode)
+const cashData=await getCashRange(
+route.from,
+route.destinationCode,
+route.cabin
+)
 
 const mrRequired=getMRRequired(route.program,route.points)
 
@@ -127,31 +138,31 @@ if(cashData&&cashData.average){
 value=((cashData.average-route.taxes)/route.points)*100
 }
 
-// score valore
+// value score
 const valueScore=Math.min(100,value*60)
 
-// difficoltà
+// difficulty
 let difficultyScore=70
 
 if(route.difficulty===1)difficultyScore=100
 if(route.difficulty===2)difficultyScore=70
 if(route.difficulty===3)difficultyScore=40
 
-// penalità budget
+// budget penalty
 let budgetScore=100
 
 if(mrMissing>0){
 budgetScore=Math.max(5,100-(gapRatio*180))
 }
 
-// bonus long haul
+// long haul bonus
 let longHaulBonus=0
 
 if(route.region==="Asia")longHaulBonus=8
 if(route.region==="Nord America")longHaulBonus=6
 if(route.region==="Medio Oriente")longHaulBonus=4
 
-let opportunityScore=
+const opportunityScore=
 valueScore*0.7+
 difficultyScore*0.15+
 budgetScore*0.15+
