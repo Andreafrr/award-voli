@@ -32,6 +32,11 @@ margin-right:auto;
 box-shadow:0 10px 30px rgba(0,0,0,0.05);
 }
 
+h1{
+font-size:28px;
+font-weight:700;
+}
+
 input,select{
 padding:12px;
 margin:8px;
@@ -47,6 +52,7 @@ color:white;
 border:none;
 border-radius:10px;
 cursor:pointer;
+font-weight:600;
 }
 
 .card{
@@ -57,6 +63,33 @@ max-width:500px;
 border-radius:14px;
 box-shadow:0 8px 20px rgba(0,0,0,0.06);
 text-align:left;
+}
+
+.highlight{
+border:2px solid gold;
+}
+
+.section-title{
+margin-top:40px;
+font-size:20px;
+font-weight:600;
+}
+
+/* barra valore */
+
+.value-bar-container{
+margin-top:8px;
+background:#e5e7eb;
+border-radius:6px;
+height:8px;
+width:100%;
+overflow:hidden;
+}
+
+.value-bar{
+height:8px;
+background:#4f46e5;
+border-radius:6px;
 }
 
 </style>
@@ -76,8 +109,10 @@ text-align:left;
 
 <select id="cabin">
 <option value="all">Tutte le cabine</option>
-<option value="Economy">Solo Economy</option>
-<option value="Business">Solo Business</option>
+<option value="Economy">Economy</option>
+<option value="Premium Economy">Premium Economy</option>
+<option value="Business">Business</option>
+<option value="First">First</option>
 </select>
 
 <input id="maxPoints" placeholder="MR disponibili (es. 40000)">
@@ -86,6 +121,8 @@ text-align:left;
 
 <button onclick="searchFlights()">Dove posso andare?</button>
 
+<div id="bestAbsolute"></div>
+<div id="bestDeal"></div>
 <div id="results"></div>
 
 </div>
@@ -108,25 +145,96 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
 .then(data=>{
 
 const resultsDiv=document.getElementById("results");
+const bestDiv=document.getElementById("bestDeal");
+const bestAbsoluteDiv=document.getElementById("bestAbsolute");
 
-let all=[
-...(data.sections.bookable||[]),
-...(data.sections.almost||[]),
-...(data.sections.future||[])
-];
+if(!data.sections){
+resultsDiv.innerHTML="<h2>Nessuna destinazione trovata</h2>";
+return;
+}
+
+let {bookable,almost,future}=data.sections;
+
+let all=[...bookable,...almost,...future];
 
 if(cabin!=="all"){
+bookable=bookable.filter(r=>r.cabin===cabin);
+almost=almost.filter(r=>r.cabin===cabin);
+future=future.filter(r=>r.cabin===cabin);
 all=all.filter(r=>r.cabin===cabin);
 }
 
-if(all.length===0){
-resultsDiv.innerHTML="<h2>Nessun risultato</h2>";
-return;
+/* miglior valore assoluto */
+
+let bestValue=all.find(r=>r.isBestValue);
+
+if(bestValue){
+
+bestAbsoluteDiv.innerHTML=`
+
+<div class="card highlight">
+
+🏆 <b>Miglior valore assoluto</b><br><br>
+
+${bestValue.destination} (${bestValue.region})<br>
+
+💺 ${bestValue.cabin}<br>
+
+📊 Valore punti: ${bestValue.estimatedValue} cent/punto<br>
+
+📈 Massimizzi il <b>${bestValue.valuePercent}%</b> del valore possibile
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${bestValue.valuePercent}%"></div>
+</div>
+
+💳 Richiede ${bestValue.mrRequired.toLocaleString()} MR
+
+</div>
+
+`;
+
+}
+
+/* miglior prenotabile ora */
+
+let bestNow=bookable[0];
+
+if(bestNow){
+
+bestDiv.innerHTML=`
+
+<div class="card highlight">
+
+🔥 <b>Miglior opportunità prenotabile ora</b><br><br>
+
+${bestNow.destination} (${bestNow.region})<br>
+
+💺 ${bestNow.cabin}<br>
+
+🔥 Opportunity Score: ${bestNow.opportunityScore}/100<br>
+
+📊 Massimizzi circa il <b>${bestNow.valuePercent}%</b> del valore possibile
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${bestNow.valuePercent}%"></div>
+</div>
+
+</div>
+
+`;
+
 }
 
 let html="";
 
-all.forEach(r=>{
+function renderSection(title,list){
+
+if(!list||list.length===0) return;
+
+html+=`<div class="section-title">${title}</div>`;
+
+list.forEach(r=>{
 
 const avgCash=(parseFloat(r.cashMin)+parseFloat(r.cashMax))/2;
 const saving=avgCash-parseFloat(r.taxes);
@@ -162,11 +270,23 @@ html+=`
 
 💸 Risparmio stimato: €${saving.toFixed(0)}<br><br>
 
-📊 Valore punti: <b>${r.estimatedValue}</b> cent/punto<br>
+📊 Valore punti: ${r.estimatedValue} cent/punto<br>
 
-${rating}<br><br>
+${rating}<br>
 
-🔥 Opportunity Score: ${r.opportunityScore}/100
+📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${r.valuePercent}%"></div>
+</div>
+
+🔥 Opportunity Score: ${r.opportunityScore}/100<br>
+
+${r.isBestValue?"🏆 <b>Valore più alto tra le opzioni</b><br>":""}
+
+${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
+
+${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈️ Prenotabile Ora<br>"}
 
 </div>
 
@@ -174,12 +294,20 @@ ${rating}<br><br>
 
 });
 
+}
+
+renderSection("✈️ Prenotabili Ora",bookable);
+renderSection("⚖️ Quasi Raggiungibili",almost);
+renderSection("🌍 Obiettivi Futuri",future);
+
 resultsDiv.innerHTML=html;
 
 })
 
 .catch(()=>{
+
 document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>";
+
 });
 
 }
