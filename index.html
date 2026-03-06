@@ -75,8 +75,6 @@ font-size:20px;
 font-weight:600;
 }
 
-/* barra valore */
-
 .value-bar-container{
 margin-top:8px;
 background:#e5e7eb;
@@ -117,6 +115,8 @@ border-radius:6px;
 
 <input id="maxPoints" placeholder="MR disponibili (es. 40000)">
 
+<input id="monthlyMR" placeholder="MR medi accumulati al mese (es. 12000)">
+
 <br>
 
 <button onclick="searchFlights()">Dove posso andare?</button>
@@ -129,11 +129,17 @@ border-radius:6px;
 
 <script>
 
+function safeNumber(n){
+if(!n || isNaN(n)) return 0;
+return Number(n);
+}
+
 function searchFlights(){
 
 const from=document.getElementById("from").value;
 const cabin=document.getElementById("cabin").value;
 const maxPoints=document.getElementById("maxPoints").value;
+const monthlyMR=parseInt(document.getElementById("monthlyMR").value||0);
 
 if(!maxPoints){
 alert("Inserisci i Membership Rewards disponibili");
@@ -164,11 +170,11 @@ future=future.filter(r=>r.cabin===cabin);
 all=all.filter(r=>r.cabin===cabin);
 }
 
-/* miglior valore assoluto */
-
 let bestValue=all.find(r=>r.isBestValue);
 
 if(bestValue){
+
+const percent=safeNumber(bestValue.valuePercent);
 
 bestAbsoluteDiv.innerHTML=`
 
@@ -182,10 +188,10 @@ ${bestValue.destination} (${bestValue.region})<br>
 
 📊 Valore punti: ${bestValue.estimatedValue} cent/punto<br>
 
-📈 Massimizzi il <b>${bestValue.valuePercent}%</b> del valore possibile
+📈 Massimizzi il <b>${percent}%</b> del valore possibile
 
 <div class="value-bar-container">
-<div class="value-bar" style="width:${bestValue.valuePercent}%"></div>
+<div class="value-bar" style="width:${percent}%"></div>
 </div>
 
 💳 Richiede ${bestValue.mrRequired.toLocaleString()} MR
@@ -196,11 +202,11 @@ ${bestValue.destination} (${bestValue.region})<br>
 
 }
 
-/* miglior prenotabile ora */
-
 let bestNow=bookable[0];
 
 if(bestNow){
+
+const percent=safeNumber(bestNow.valuePercent);
 
 bestDiv.innerHTML=`
 
@@ -214,10 +220,10 @@ ${bestNow.destination} (${bestNow.region})<br>
 
 🔥 Opportunity Score: ${bestNow.opportunityScore}/100<br>
 
-📊 Massimizzi circa il <b>${bestNow.valuePercent}%</b> del valore possibile
+📊 Massimizzi circa il <b>${percent}%</b> del valore possibile
 
 <div class="value-bar-container">
-<div class="value-bar" style="width:${bestNow.valuePercent}%"></div>
+<div class="value-bar" style="width:${percent}%"></div>
 </div>
 
 </div>
@@ -236,12 +242,21 @@ html+=`<div class="section-title">${title}</div>`;
 
 list.forEach(r=>{
 
-const avgCash=(parseFloat(r.cashMin)+parseFloat(r.cashMax))/2;
-const saving=avgCash-parseFloat(r.taxes);
+const min=safeNumber(r.cashMin);
+const max=safeNumber(r.cashMax);
 
-const value=parseFloat(r.estimatedValue);
+let priceLabel="Prezzo non disponibile";
+
+if(min>0) priceLabel=`€${min} - €${max}`;
+
+const avg=(min+max)/2;
+const saving=avg-safeNumber(r.taxes);
+
+const percent=safeNumber(r.valuePercent);
 
 let rating="";
+
+const value=parseFloat(r.estimatedValue);
 
 if(value>=3)
 rating="🔥 Redemption eccellente";
@@ -251,6 +266,12 @@ else if(value>=1)
 rating="👍 Buona redemption";
 else
 rating="⚠️ Valore debole";
+
+let months="";
+
+if(r.mrMissing>0 && monthlyMR>0){
+months=`⏳ Circa ${Math.ceil(r.mrMissing/monthlyMR)} mesi di accumulo<br>`;
+}
 
 html+=`
 
@@ -266,7 +287,7 @@ html+=`
 
 💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
 
-💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
+💰 Prezzo medio cash: ${priceLabel}<br>
 
 💸 Risparmio stimato: €${saving.toFixed(0)}<br><br>
 
@@ -274,10 +295,10 @@ html+=`
 
 ${rating}<br>
 
-📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
+📊 Massimizzi circa il <b>${percent}%</b> del valore massimo
 
 <div class="value-bar-container">
-<div class="value-bar" style="width:${r.valuePercent}%"></div>
+<div class="value-bar" style="width:${percent}%"></div>
 </div>
 
 🔥 Opportunity Score: ${r.opportunityScore}/100<br>
@@ -286,7 +307,7 @@ ${r.isBestValue?"🏆 <b>Valore più alto tra le opzioni</b><br>":""}
 
 ${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
 
-${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈️ Prenotabile Ora<br>"}
+${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>${months}`:"✈️ Prenotabile Ora<br>"}
 
 </div>
 
