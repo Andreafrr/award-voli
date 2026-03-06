@@ -59,12 +59,6 @@ box-shadow:0 8px 20px rgba(0,0,0,0.06);
 text-align:left;
 }
 
-.section-title{
-margin-top:40px;
-font-size:20px;
-font-weight:600;
-}
-
 </style>
 
 </head>
@@ -137,6 +131,19 @@ all.forEach(r=>{
 const avgCash=(parseFloat(r.cashMin)+parseFloat(r.cashMax))/2;
 const saving=avgCash-parseFloat(r.taxes);
 
+const value=parseFloat(r.estimatedValue);
+
+let rating="";
+
+if(value>=3)
+rating="🔥 Redemption eccellente";
+else if(value>=2)
+rating="⭐ Ottima redemption";
+else if(value>=1)
+rating="👍 Buona redemption";
+else
+rating="⚠️ Valore debole";
+
 html+=`
 
 <div class="card">
@@ -155,9 +162,11 @@ html+=`
 
 💸 Risparmio stimato: €${saving.toFixed(0)}<br><br>
 
-📊 Valore punti: ${r.estimatedValue} cent/punto<br>
+📊 Valore punti: <b>${r.estimatedValue}</b> cent/punto<br>
 
-🔥 Opportunity Score: ${r.opportunityScore}/100<br>
+${rating}<br><br>
+
+🔥 Opportunity Score: ${r.opportunityScore}/100
 
 </div>
 
