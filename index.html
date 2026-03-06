@@ -32,11 +32,6 @@ margin-right:auto;
 box-shadow:0 10px 30px rgba(0,0,0,0.05);
 }
 
-h1{
-font-size:28px;
-font-weight:700;
-}
-
 input,select{
 padding:12px;
 margin:8px;
@@ -104,6 +99,7 @@ font-weight:600;
 
 <button onclick="searchFlights()">Dove posso andare?</button>
 
+<div id="possibleFlights"></div>
 <div id="sweetSpots"></div>
 <div id="bestAbsolute"></div>
 <div id="bestToday"></div>
@@ -127,10 +123,63 @@ const resultsDiv=document.getElementById("results")
 const bestAbsoluteDiv=document.getElementById("bestAbsolute")
 const bestTodayDiv=document.getElementById("bestToday")
 const sweetSpotsDiv=document.getElementById("sweetSpots")
+const possibleDiv=document.getElementById("possibleFlights")
 
 let {bookable,almost,future}=data.sections
 
 let all=[...bookable,...almost,...future]
+
+const possible=data.possibleDestinations
+
+if(possible&&possible.length>0){
+
+let html=`<div class="card highlight">
+
+✈️ <b>Con i tuoi punti puoi volare qui</b><br><br>
+`
+
+possible.slice(0,6).forEach(p=>{
+
+html+=`
+
+${p.destination} (${p.region}) — ${p.cabin}<br>
+💳 ${p.mrRequired.toLocaleString()} MR<br><br>
+
+`
+
+})
+
+html+=`</div>`
+
+possibleDiv.innerHTML=html
+
+}
+
+const sweetSpots=data.sweetSpots
+
+if(sweetSpots&&sweetSpots.length>0){
+
+let html=`<div class="card highlight">
+
+🔥 <b>Sweet Spots</b><br><br>
+`
+
+sweetSpots.forEach(s=>{
+
+html+=`
+
+${s.destination} (${s.region}) — ${s.cabin}<br>
+📊 ${s.estimatedValue} cent/punto<br><br>
+
+`
+
+})
+
+html+=`</div>`
+
+sweetSpotsDiv.innerHTML=html
+
+}
 
 let bestValue=all.find(r=>r.isBestValue)
 
@@ -146,9 +195,7 @@ ${bestValue.destination} (${bestValue.region})<br>
 
 💺 ${bestValue.cabin}<br>
 
-📊 Valore punti: ${bestValue.estimatedValue} cent/punto<br>
-
-💳 Richiede ${bestValue.mrRequired.toLocaleString()} MR
+📊 ${bestValue.estimatedValue} cent/punto
 
 </div>
 
@@ -175,35 +222,6 @@ ${bestToday.destination} (${bestToday.region})<br>
 </div>
 
 `
-
-}
-
-const sweetSpots=data.sweetSpots
-
-if(sweetSpots&&sweetSpots.length>0){
-
-let html=`
-
-<div class="card highlight">
-
-🔥 <b>Sweet Spots</b><br><br>
-
-`
-
-sweetSpots.forEach(s=>{
-
-html+=`
-
-${s.destination} (${s.region}) — ${s.cabin}<br>
-📊 ${s.estimatedValue} cent/punto<br><br>
-
-`
-
-})
-
-html+=`</div>`
-
-sweetSpotsDiv.innerHTML=html
 
 }
 
@@ -256,5 +274,4 @@ resultsDiv.innerHTML=html
 </script>
 
 </body>
-
 </html>
