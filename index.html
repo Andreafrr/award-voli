@@ -75,7 +75,7 @@ font-size:20px;
 font-weight:600;
 }
 
-/* Barra valore */
+/* barra valore */
 
 .value-bar-container{
 margin-top:8px;
@@ -90,6 +90,20 @@ overflow:hidden;
 height:8px;
 background:#4f46e5;
 border-radius:6px;
+}
+
+/* messaggi educativi */
+
+.value-warning{
+margin-top:8px;
+font-size:14px;
+color:#b91c1c;
+}
+
+.value-tip{
+margin-top:8px;
+font-size:14px;
+color:#065f46;
 }
 
 </style>
@@ -148,11 +162,11 @@ return;
 
 const {bookable,almost,future}=data.sections;
 
-/* miglior valore assoluto */
-
 let all=[...bookable,...almost,...future];
 
 let bestValue=all.find(r=>r.isBestValue);
+
+/* miglior valore assoluto */
 
 if(bestValue){
 
@@ -166,7 +180,7 @@ ${bestValue.destination} (${bestValue.region})<br>
 
 📊 Valore punti: ${bestValue.estimatedValue} cent/punto<br>
 
-📈 Massimizzi il <b>${bestValue.valuePercent}%</b> del valore possibile<br>
+📈 Massimizzi il <b>${bestValue.valuePercent}%</b> del valore possibile
 
 <div class="value-bar-container">
 <div class="value-bar" style="width:${bestValue.valuePercent}%"></div>
@@ -231,6 +245,26 @@ ratingLabel="⚖️ <b style='color:orange;'>Buona Opportunità</b>";
 else
 ratingLabel="⚠️ <b style='color:red;'>Valore Debole</b>";
 
+/* messaggio educativo */
+
+let valueMessage="";
+
+if(r.valuePercent<50){
+
+valueMessage=`<div class="value-warning">
+⚠️ Con questa scelta utilizzi solo il <b>${r.valuePercent}%</b> del valore possibile dei tuoi punti.
+</div>`;
+
+}
+
+if(r.valuePercent>80 && r.mrMissing>0){
+
+valueMessage=`<div class="value-tip">
+💡 Aspettando potresti ottenere oltre il doppio del valore.
+</div>`;
+
+}
+
 html+=`
 
 <div class="card">
@@ -249,7 +283,7 @@ html+=`
 
 📊 Valore punti: ${r.estimatedValue} cent/punto<br>
 
-📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo<br>
+📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
 
 <div class="value-bar-container">
 <div class="value-bar" style="width:${r.valuePercent}%"></div>
@@ -261,7 +295,9 @@ ${r.isBestValue?"🏆 <b>Valore più alto tra le opzioni</b><br>":""}
 
 ${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
 
-${ratingLabel}<br>
+${ratingLabel}
+
+${valueMessage}
 
 ${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈️ Prenotabile Ora<br>"}
 
