@@ -32,11 +32,6 @@ margin-right:auto;
 box-shadow:0 10px 30px rgba(0,0,0,0.05);
 }
 
-h1{
-font-size:28px;
-font-weight:700;
-}
-
 input,select{
 padding:12px;
 margin:8px;
@@ -52,7 +47,6 @@ color:white;
 border:none;
 border-radius:10px;
 cursor:pointer;
-font-weight:600;
 }
 
 .card{
@@ -65,45 +59,10 @@ box-shadow:0 8px 20px rgba(0,0,0,0.06);
 text-align:left;
 }
 
-.highlight{
-border:2px solid gold;
-}
-
 .section-title{
 margin-top:40px;
 font-size:20px;
 font-weight:600;
-}
-
-/* barra valore */
-
-.value-bar-container{
-margin-top:8px;
-background:#e5e7eb;
-border-radius:6px;
-height:8px;
-width:100%;
-overflow:hidden;
-}
-
-.value-bar{
-height:8px;
-background:#4f46e5;
-border-radius:6px;
-}
-
-/* messaggi educativi */
-
-.value-warning{
-margin-top:8px;
-font-size:14px;
-color:#b91c1c;
-}
-
-.value-tip{
-margin-top:8px;
-font-size:14px;
-color:#065f46;
 }
 
 </style>
@@ -121,15 +80,17 @@ color:#065f46;
 <option value="FCO">Roma (FCO)</option>
 </select>
 
+<select id="cabin">
+<option value="all">Tutte le cabine</option>
+<option value="Economy">Solo Economy</option>
+<option value="Business">Solo Business</option>
+</select>
+
 <input id="maxPoints" placeholder="MR disponibili (es. 40000)">
 
 <br>
 
 <button onclick="searchFlights()">Dove posso andare?</button>
-
-<div id="bestAbsolute"></div>
-
-<div id="bestDeal"></div>
 
 <div id="results"></div>
 
@@ -140,6 +101,7 @@ color:#065f46;
 function searchFlights(){
 
 const from=document.getElementById("from").value;
+const cabin=document.getElementById("cabin").value;
 const maxPoints=document.getElementById("maxPoints").value;
 
 if(!maxPoints){
@@ -152,124 +114,36 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
 .then(data=>{
 
 const resultsDiv=document.getElementById("results");
-const bestDiv=document.getElementById("bestDeal");
-const bestAbsoluteDiv=document.getElementById("bestAbsolute");
 
-if(!data.sections){
-resultsDiv.innerHTML="<h2>Nessuna destinazione trovata</h2>";
+let all=[
+...(data.sections.bookable||[]),
+...(data.sections.almost||[]),
+...(data.sections.future||[])
+];
+
+if(cabin!=="all"){
+all=all.filter(r=>r.cabin===cabin);
+}
+
+if(all.length===0){
+resultsDiv.innerHTML="<h2>Nessun risultato</h2>";
 return;
-}
-
-const {bookable,almost,future}=data.sections;
-
-let all=[...bookable,...almost,...future];
-
-let bestValue=all.find(r=>r.isBestValue);
-
-/* miglior valore assoluto */
-
-if(bestValue){
-
-bestAbsoluteDiv.innerHTML=`
-
-<div class="card highlight">
-
-🏆 <b>Miglior valore assoluto</b><br><br>
-
-${bestValue.destination} (${bestValue.region})<br>
-
-📊 Valore punti: ${bestValue.estimatedValue} cent/punto<br>
-
-📈 Massimizzi il <b>${bestValue.valuePercent}%</b> del valore possibile
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${bestValue.valuePercent}%"></div>
-</div>
-
-💳 Richiede ${bestValue.mrRequired.toLocaleString()} MR
-
-</div>
-
-`;
-
-}
-
-/* miglior prenotabile ora */
-
-let bestNow=bookable[0];
-
-if(bestNow){
-
-bestDiv.innerHTML=`
-
-<div class="card highlight">
-
-🔥 <b>Miglior opportunità prenotabile ora</b><br><br>
-
-${bestNow.destination} (${bestNow.region})<br>
-
-🔥 Opportunity Score: ${bestNow.opportunityScore}/100<br>
-
-📊 Massimizzi circa il <b>${bestNow.valuePercent}%</b> del valore possibile
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${bestNow.valuePercent}%"></div>
-</div>
-
-</div>
-
-`;
-
 }
 
 let html="";
 
-function renderSection(title,list){
-
-if(!list || list.length===0) return;
-
-html+=`<div class="section-title">${title}</div>`;
-
-list.forEach(r=>{
+all.forEach(r=>{
 
 const avgCash=(parseFloat(r.cashMin)+parseFloat(r.cashMax))/2;
-
 const saving=avgCash-parseFloat(r.taxes);
-
-let ratingLabel="";
-
-if(r.opportunityScore>=75)
-ratingLabel="🔥 <b style='color:green;'>Alta Opportunità</b>";
-else if(r.opportunityScore>=55)
-ratingLabel="⚖️ <b style='color:orange;'>Buona Opportunità</b>";
-else
-ratingLabel="⚠️ <b style='color:red;'>Valore Debole</b>";
-
-/* messaggio educativo */
-
-let valueMessage="";
-
-if(r.valuePercent<50){
-
-valueMessage=`<div class="value-warning">
-⚠️ Con questa scelta utilizzi solo il <b>${r.valuePercent}%</b> del valore possibile dei tuoi punti.
-</div>`;
-
-}
-
-if(r.valuePercent>80 && r.mrMissing>0){
-
-valueMessage=`<div class="value-tip">
-💡 Aspettando potresti ottenere oltre il doppio del valore.
-</div>`;
-
-}
 
 html+=`
 
 <div class="card">
 
 <b>${r.destination}</b> (${r.region})<br><br>
+
+💺 Cabina: <b>${r.cabin}</b><br>
 
 💳 Programma: <b>${r.program}</b><br>
 
@@ -283,23 +157,7 @@ html+=`
 
 📊 Valore punti: ${r.estimatedValue} cent/punto<br>
 
-📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${r.valuePercent}%"></div>
-</div>
-
 🔥 Opportunity Score: ${r.opportunityScore}/100<br>
-
-${r.isBestValue?"🏆 <b>Valore più alto tra le opzioni</b><br>":""}
-
-${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
-
-${ratingLabel}
-
-${valueMessage}
-
-${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈️ Prenotabile Ora<br>"}
 
 </div>
 
@@ -307,20 +165,12 @@ ${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈�
 
 });
 
-}
-
-renderSection("✈️ Prenotabili Ora",bookable);
-renderSection("⚖️ Quasi Raggiungibili",almost);
-renderSection("🌍 Obiettivi Futuri",future);
-
 resultsDiv.innerHTML=html;
 
 })
 
 .catch(()=>{
-
 document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>";
-
 });
 
 }
