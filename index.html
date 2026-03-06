@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Comparatore Voli Premio</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -72,7 +75,25 @@ font-size:20px;
 font-weight:600;
 }
 
+/* Barra valore */
+
+.value-bar-container{
+margin-top:8px;
+background:#e5e7eb;
+border-radius:6px;
+height:8px;
+width:100%;
+overflow:hidden;
+}
+
+.value-bar{
+height:8px;
+background:#4f46e5;
+border-radius:6px;
+}
+
 </style>
+
 </head>
 
 <body>
@@ -93,6 +114,7 @@ font-weight:600;
 <button onclick="searchFlights()">Dove posso andare?</button>
 
 <div id="bestAbsolute"></div>
+
 <div id="bestDeal"></div>
 
 <div id="results"></div>
@@ -126,11 +148,10 @@ return;
 
 const {bookable,almost,future}=data.sections;
 
-/* -----------------------
-MIGLIOR VALORE ASSOLUTO
-------------------------*/
+/* miglior valore assoluto */
 
 let all=[...bookable,...almost,...future];
+
 let bestValue=all.find(r=>r.isBestValue);
 
 if(bestValue){
@@ -147,6 +168,10 @@ ${bestValue.destination} (${bestValue.region})<br>
 
 📈 Massimizzi il <b>${bestValue.valuePercent}%</b> del valore possibile<br>
 
+<div class="value-bar-container">
+<div class="value-bar" style="width:${bestValue.valuePercent}%"></div>
+</div>
+
 💳 Richiede ${bestValue.mrRequired.toLocaleString()} MR
 
 </div>
@@ -155,9 +180,7 @@ ${bestValue.destination} (${bestValue.region})<br>
 
 }
 
-/* -----------------------
-MIGLIOR PRENOTABILE ORA
-------------------------*/
+/* miglior prenotabile ora */
 
 let bestNow=bookable[0];
 
@@ -175,6 +198,10 @@ ${bestNow.destination} (${bestNow.region})<br>
 
 📊 Massimizzi circa il <b>${bestNow.valuePercent}%</b> del valore possibile
 
+<div class="value-bar-container">
+<div class="value-bar" style="width:${bestNow.valuePercent}%"></div>
+</div>
+
 </div>
 
 `;
@@ -183,19 +210,16 @@ ${bestNow.destination} (${bestNow.region})<br>
 
 let html="";
 
-/* -----------------------
-RENDER SEZIONI
-------------------------*/
-
 function renderSection(title,list){
 
-if(!list||list.length===0) return;
+if(!list || list.length===0) return;
 
 html+=`<div class="section-title">${title}</div>`;
 
 list.forEach(r=>{
 
 const avgCash=(parseFloat(r.cashMin)+parseFloat(r.cashMax))/2;
+
 const saving=avgCash-parseFloat(r.taxes);
 
 let ratingLabel="";
@@ -227,6 +251,10 @@ html+=`
 
 📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo<br>
 
+<div class="value-bar-container">
+<div class="value-bar" style="width:${r.valuePercent}%"></div>
+</div>
+
 🔥 Opportunity Score: ${r.opportunityScore}/100<br>
 
 ${r.isBestValue?"🏆 <b>Valore più alto tra le opzioni</b><br>":""}
@@ -244,10 +272,6 @@ ${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈�
 });
 
 }
-
-/* -----------------------
-SEZIONI
-------------------------*/
 
 renderSection("✈️ Prenotabili Ora",bookable);
 renderSection("⚖️ Quasi Raggiungibili",almost);
@@ -268,4 +292,5 @@ document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>";
 </script>
 
 </body>
+
 </html>
