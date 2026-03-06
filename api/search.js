@@ -1,10 +1,8 @@
 const { routes } = require("../data/routes.js")
 
-// cache memoria
 const cache = {}
 const CACHE_TTL = 30 * 60 * 1000
 
-// conversione MR
 function getMRRequired(program, airlinePoints){
 
 const rates={
@@ -34,7 +32,6 @@ const parsedMaxMR=parseInt(maxMR)
 
 const filtered=routes.filter(r=>r.from===from)
 
-// token Amadeus
 const key=process.env.AMADEUS_API_KEY
 const secret=process.env.AMADEUS_API_SECRET
 
@@ -54,7 +51,6 @@ if(!accessToken){
 return res.status(500).json({error:"Token Amadeus non ottenuto"})
 }
 
-// funzione prezzo cash
 async function getCashRange(origin,destination,cabin){
 
 const cacheKey=`${origin}-${destination}-${cabin}`
@@ -64,14 +60,12 @@ if(cache[cacheKey]&&(now-cache[cacheKey].timestamp<CACHE_TTL)){
 return cache[cacheKey].data
 }
 
-// cabina Amadeus
 let travelClass="ECONOMY"
 
 if(cabin==="Business") travelClass="BUSINESS"
 if(cabin==="First") travelClass="FIRST"
 if(cabin==="Premium Economy") travelClass="PREMIUM_ECONOMY"
 
-// scan più date
 const today=new Date()
 const offsets=[20,40,60]
 
@@ -90,11 +84,7 @@ const response=await fetch(
 const data=await response.json()
 
 if(data.data&&data.data.length>0){
-
-return Math.min(
-...data.data.map(f=>parseFloat(f.price.total))
-)
-
+return Math.min(...data.data.map(f=>parseFloat(f.price.total)))
 }
 
 return null
@@ -117,14 +107,9 @@ return result
 
 }
 
-// arricchimento rotte
 const enriched=await Promise.all(filtered.map(async(route)=>{
 
-const cashData=await getCashRange(
-route.from,
-route.destinationCode,
-route.cabin
-)
+const cashData=await getCashRange(route.from,route.destinationCode,route.cabin)
 
 const mrRequired=getMRRequired(route.program,route.points)
 
@@ -138,24 +123,20 @@ if(cashData&&cashData.average){
 value=((cashData.average-route.taxes)/route.points)*100
 }
 
-// value score
 const valueScore=Math.min(100,value*60)
 
-// difficulty
 let difficultyScore=70
 
 if(route.difficulty===1)difficultyScore=100
 if(route.difficulty===2)difficultyScore=70
 if(route.difficulty===3)difficultyScore=40
 
-// budget penalty
 let budgetScore=100
 
 if(mrMissing>0){
 budgetScore=Math.max(5,100-(gapRatio*180))
 }
 
-// long haul bonus
 let longHaulBonus=0
 
 if(route.region==="Asia")longHaulBonus=8
@@ -188,39 +169,32 @@ gapRatio
 
 }))
 
-// miglior valore
-const bestValue=Math.max(
-...enriched.map(r=>parseFloat(r.estimatedValue)||0)
-)
+const bestValue=Math.max(...enriched.map(r=>parseFloat(r.estimatedValue)||0))
 
 enriched.forEach(r=>{
 
 const val=parseFloat(r.estimatedValue)||0
 
-r.valuePercent=bestValue
-?Math.round((val/bestValue)*100)
-:0
+r.valuePercent=bestValue?Math.round((val/bestValue)*100):0
 
 r.isBestValue=val===bestValue
 
 const diff=bestValue-val
 
-r.relativeLoss=Math.max(
-0,
-(diff/100)*parsedMaxMR
-).toFixed(0)
+r.relativeLoss=Math.max(0,(diff/100)*parsedMaxMR).toFixed(0)
 
 })
 
-// ordinamento
 enriched.sort((a,b)=>b.opportunityScore-a.opportunityScore)
 
-// sezioni
 const bookable=enriched.filter(r=>r.mrMissing===0)
-
 const almost=enriched.filter(r=>r.mrMissing>0&&r.gapRatio<=0.25)
-
 const future=enriched.filter(r=>r.gapRatio>0.25)
+
+const sweetSpots=enriched
+.filter(r=>parseFloat(r.estimatedValue)>=1.2)
+.sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))
+.slice(0,5)
 
 return res.status(200).json({
 
@@ -233,7 +207,9 @@ almost,
 future
 },
 
-bestRedemptionToday:enriched[0]
+bestRedemptionToday: enriched[0],
+
+sweetSpots
 
 })
 
