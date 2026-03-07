@@ -101,16 +101,25 @@ border-radius:6px;
 <h1>🎯 Scopri dove i tuoi punti valgono di più</h1>
 
 <select id="from">
+
+<option value="IT">Italia 🇮🇹 (tutti gli aeroporti)</option>
+
 <option value="MXP">Milano (MXP)</option>
 <option value="FCO">Roma (FCO)</option>
+<option value="VCE">Venezia (VCE)</option>
+<option value="BLQ">Bologna (BLQ)</option>
+<option value="NAP">Napoli (NAP)</option>
+
 </select>
 
 <select id="cabin">
+
 <option value="all">Tutte le cabine</option>
 <option value="Economy">Economy</option>
 <option value="Premium Economy">Premium Economy</option>
 <option value="Business">Business</option>
 <option value="First">First</option>
+
 </select>
 
 <br>
@@ -145,8 +154,10 @@ const monthlyMR=parseInt(document.getElementById("monthlyMR").value)
 const date=document.getElementById("date").value
 
 if(!maxPoints){
+
 alert("Inserisci i Membership Rewards disponibili")
 return
+
 }
 
 let url=`/api/search?from=${from}&maxMR=${maxPoints}`
@@ -154,4 +165,223 @@ let url=`/api/search?from=${from}&maxMR=${maxPoints}`
 if(date) url+=`&date=${date}`
 
 fetch(url)
-.then(res=>
+
+.then(res=>res.json())
+
+.then(data=>{
+
+const resultsDiv=document.getElementById("results")
+const bestDiv=document.getElementById("bestDeal")
+const bestAbsoluteDiv=document.getElementById("bestAbsolute")
+const bestDealsDiv=document.getElementById("bestDeals")
+
+if(!data.sections){
+
+resultsDiv.innerHTML="<h2>Nessuna destinazione trovata</h2>"
+return
+
+}
+
+let {bookable,almost,future}=data.sections
+
+let all=[...bookable,...almost,...future]
+
+if(cabin!=="all"){
+
+bookable=bookable.filter(r=>r.cabin===cabin)
+almost=almost.filter(r=>r.cabin===cabin)
+future=future.filter(r=>r.cabin===cabin)
+
+all=all.filter(r=>r.cabin===cabin)
+
+}
+
+const bestValue=Math.max(...all.map(r=>parseFloat(r.estimatedValue||0)))
+
+all.forEach(r=>{
+
+const value=parseFloat(r.estimatedValue||0)
+r.valuePercent=Math.round((value/bestValue)*100)
+
+})
+
+const bestAbsolute=all.find(r=>r.valuePercent===100)
+
+if(bestAbsolute){
+
+bestAbsoluteDiv.innerHTML=`
+
+<div class="card highlight">
+
+🏆 <b>Miglior valore assoluto</b><br><br>
+
+${bestAbsolute.destination} (${bestAbsolute.region})<br>
+
+✈️ Partenza: ${bestAbsolute.from}<br>
+
+💺 ${bestAbsolute.cabin}<br>
+
+📊 Valore punti: ${bestAbsolute.estimatedValue} cent/punto<br>
+
+📈 Massimizzi il <b>${bestAbsolute.valuePercent}%</b> del valore possibile
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${bestAbsolute.valuePercent}%"></div>
+</div>
+
+💳 Richiede ${bestAbsolute.mrRequired.toLocaleString()} MR
+
+</div>
+
+`
+
+}
+
+let bestNow=bookable[0]
+
+if(bestNow){
+
+bestDiv.innerHTML=`
+
+<div class="card highlight">
+
+🔥 <b>Miglior opportunità prenotabile ora</b><br><br>
+
+${bestNow.destination} (${bestNow.region})<br>
+
+✈️ Partenza: ${bestNow.from}<br>
+
+💺 ${bestNow.cabin}<br>
+
+🔥 Opportunity Score: ${bestNow.opportunityScore||0}/100<br>
+
+📊 Massimizzi circa il <b>${bestNow.valuePercent}%</b> del valore possibile
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${bestNow.valuePercent}%"></div>
+</div>
+
+</div>
+
+`
+
+}
+
+if(data.bestDeals){
+
+let dealsHTML=`<div class="section-title">🔥 Migliori redemption trovate</div>`
+
+data.bestDeals.forEach(d=>{
+
+dealsHTML+=`
+
+<div class="card">
+
+<b>${d.destination}</b><br>
+
+✈️ Partenza: ${d.from}<br>
+
+💺 ${d.cabin}<br>
+
+📊 Valore punti: ${d.estimatedValue} cent/punto<br>
+
+💳 Richiede ${d.mrRequired.toLocaleString()} MR
+
+</div>
+
+`
+
+})
+
+bestDealsDiv.innerHTML=dealsHTML
+
+}
+
+let html=""
+
+function renderSection(title,list){
+
+if(!list||list.length===0) return
+
+html+=`<div class="section-title">${title}</div>`
+
+list.forEach(r=>{
+
+const avgCash=parseFloat(r.cashAverage||0)
+const saving=Math.max(0,avgCash-r.taxes)
+
+let monthsText=""
+
+if(monthlyMR && r.mrMissing>0){
+
+const months=Math.ceil(r.mrMissing/monthlyMR)
+
+monthsText=`📅 Circa ${months} mesi per accumulare i punti mancanti<br>`
+
+}
+
+html+=`
+
+<div class="card">
+
+<b>${r.destination}</b> (${r.region})<br>
+
+✈️ Partenza: ${r.from}<br><br>
+
+💺 Cabina: <b>${r.cabin}</b><br>
+
+💳 Programma: <b>${r.program}</b><br>
+
+✈️ ${r.points.toLocaleString()} punti compagnia<br>
+
+💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
+
+💰 Prezzo medio cash: ${r.cashMin==="N/A"?"Prezzo non disponibile":`€${r.cashMin}`}<br>
+
+💸 Risparmio stimato: €${saving.toFixed(0)}<br><br>
+
+📊 Valore punti: ${r.estimatedValue||0} cent/punto<br>
+
+📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${r.valuePercent}%"></div>
+</div>
+
+🔥 Opportunity Score: ${r.opportunityScore||0}/100<br>
+
+${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
+
+${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈️ Prenotabile Ora<br>"}
+
+${monthsText}
+
+</div>
+
+`
+
+})
+
+}
+
+renderSection("✈️ Prenotabili Ora",bookable)
+renderSection("⚖️ Quasi Raggiungibili",almost)
+renderSection("🌍 Obiettivi Futuri",future)
+
+resultsDiv.innerHTML=html
+
+})
+
+.catch(()=>{
+
+document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>"
+
+})
+
+}
+
+</script>
+
+</body>
+
+</html>
