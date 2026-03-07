@@ -26,10 +26,15 @@ background:white;
 padding:30px;
 border-radius:16px;
 width:90%;
-max-width:700px;
+max-width:800px;
 margin-left:auto;
 margin-right:auto;
 box-shadow:0 10px 30px rgba(0,0,0,0.05);
+}
+
+h1{
+font-size:28px;
+font-weight:700;
 }
 
 input,select{
@@ -54,10 +59,14 @@ font-weight:600;
 background:white;
 margin:20px auto;
 padding:22px;
-max-width:500px;
+max-width:600px;
 border-radius:14px;
 box-shadow:0 8px 20px rgba(0,0,0,0.06);
 text-align:left;
+}
+
+.highlight{
+border:2px solid gold;
 }
 
 .section-title{
@@ -108,16 +117,19 @@ border-radius:6px;
 
 <input id="maxPoints" placeholder="MR disponibili (es. 70000)">
 
+<input id="monthlyMR" placeholder="MR medi accumulati al mese (es. 12000)">
+
 <br>
 
-<label>Data partenza</label>
-
-<input type="date" id="departureDate">
+<input type="date" id="date">
 
 <br>
 
 <button onclick="searchFlights()">Dove posso andare?</button>
 
+<div id="bestAbsolute"></div>
+<div id="bestDeal"></div>
+<div id="bestDeals"></div>
 <div id="results"></div>
 
 </div>
@@ -128,77 +140,18 @@ function searchFlights(){
 
 const from=document.getElementById("from").value
 const cabin=document.getElementById("cabin").value
-const maxPoints=document.getElementById("maxPoints").value
-const date=document.getElementById("departureDate").value
+const maxPoints=parseInt(document.getElementById("maxPoints").value)
+const monthlyMR=parseInt(document.getElementById("monthlyMR").value)
+const date=document.getElementById("date").value
 
-fetch(`/api/search?from=${from}&maxMR=${maxPoints}&date=${date}`)
-.then(res=>res.json())
-.then(data=>{
-
-const resultsDiv=document.getElementById("results")
-
-let {bookable,almost,future}=data.sections
-
-let html=""
-
-function renderSection(title,list){
-
-if(!list||list.length===0)return
-
-html+=`<div class="section-title">${title}</div>`
-
-list.forEach(r=>{
-
-const avgCash=r.cashAverage||0
-const saving=avgCash-r.taxes
-
-html+=`
-
-<div class="card">
-
-<b>${r.destination}</b> (${r.region})<br><br>
-
-💺 Cabina: <b>${r.cabin}</b><br>
-
-💳 Programma: <b>${r.program}</b><br>
-
-✈️ ${r.points.toLocaleString()} punti compagnia<br>
-
-💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
-
-💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
-
-💸 Risparmio stimato: €${Math.round(saving)}<br><br>
-
-📊 Valore punti: ${r.estimatedValue} cent/punto<br>
-
-📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${r.valuePercent}%"></div>
-</div>
-
-🔥 Opportunity Score: ${r.opportunityScore}/100<br>
-
-</div>
-
-`
-
-})
-
+if(!maxPoints){
+alert("Inserisci i Membership Rewards disponibili")
+return
 }
 
-renderSection("✈️ Prenotabili Ora",bookable)
-renderSection("⚖️ Quasi Raggiungibili",almost)
-renderSection("🌍 Obiettivi Futuri",future)
+let url=`/api/search?from=${from}&maxMR=${maxPoints}`
 
-resultsDiv.innerHTML=html
+if(date) url+=`&date=${date}`
 
-})
-
-}
-
-</script>
-
-</body>
-</html>
+fetch(url)
+.then(res=>
