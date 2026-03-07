@@ -26,7 +26,7 @@ background:white;
 padding:30px;
 border-radius:16px;
 width:90%;
-max-width:750px;
+max-width:700px;
 margin-left:auto;
 margin-right:auto;
 box-shadow:0 10px 30px rgba(0,0,0,0.05);
@@ -54,14 +54,10 @@ font-weight:600;
 background:white;
 margin:20px auto;
 padding:22px;
-max-width:520px;
+max-width:500px;
 border-radius:14px;
 box-shadow:0 8px 20px rgba(0,0,0,0.06);
 text-align:left;
-}
-
-.highlight{
-border:2px solid gold;
 }
 
 .section-title{
@@ -114,16 +110,14 @@ border-radius:6px;
 
 <br>
 
-<input type="date" id="departureDate">
+<label>Data partenza</label>
 
-<input type="date" id="returnDate">
+<input type="date" id="departureDate">
 
 <br>
 
 <button onclick="searchFlights()">Dove posso andare?</button>
 
-<div id="bestAbsolute"></div>
-<div id="bestToday"></div>
 <div id="results"></div>
 
 </div>
@@ -135,88 +129,21 @@ function searchFlights(){
 const from=document.getElementById("from").value
 const cabin=document.getElementById("cabin").value
 const maxPoints=document.getElementById("maxPoints").value
-const departure=document.getElementById("departureDate").value
+const date=document.getElementById("departureDate").value
 
-if(!maxPoints){
-alert("Inserisci i MR disponibili")
-return
-}
-
-fetch(`/api/search?from=${from}&maxMR=${maxPoints}&date=${departure}`)
+fetch(`/api/search?from=${from}&maxMR=${maxPoints}&date=${date}`)
 .then(res=>res.json())
 .then(data=>{
 
 const resultsDiv=document.getElementById("results")
-const bestAbsoluteDiv=document.getElementById("bestAbsolute")
-const bestTodayDiv=document.getElementById("bestToday")
 
 let {bookable,almost,future}=data.sections
-
-let all=[...bookable,...almost,...future]
-
-if(cabin!=="all"){
-all=all.filter(r=>r.cabin===cabin)
-}
-
-let bestValue=all.find(r=>r.isBestValue)
-
-if(bestValue){
-
-bestAbsoluteDiv.innerHTML=`
-
-<div class="card highlight">
-
-🏆 <b>Miglior valore assoluto</b><br><br>
-
-${bestValue.destination} (${bestValue.region})<br>
-
-💺 ${bestValue.cabin}<br>
-
-📊 Valore punti: ${bestValue.estimatedValue} cent/punto<br>
-
-📈 Massimizzi il <b>${bestValue.valuePercent}%</b> del valore possibile
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${bestValue.valuePercent}%"></div>
-</div>
-
-💳 Richiede ${bestValue.mrRequired.toLocaleString()} MR
-
-</div>
-
-`
-
-}
-
-let bestNow=bookable[0]
-
-if(bestNow){
-
-bestTodayDiv.innerHTML=`
-
-<div class="card highlight">
-
-🔥 <b>Miglior opportunità prenotabile ora</b><br><br>
-
-${bestNow.destination} (${bestNow.region})<br>
-
-💺 ${bestNow.cabin}<br>
-
-🔥 Opportunity Score: ${bestNow.opportunityScore}/100<br>
-
-📊 Massimizzi circa il <b>${bestNow.valuePercent}%</b> del valore possibile
-
-</div>
-
-`
-
-}
 
 let html=""
 
 function renderSection(title,list){
 
-if(!list||list.length===0) return
+if(!list||list.length===0)return
 
 html+=`<div class="section-title">${title}</div>`
 
@@ -224,17 +151,6 @@ list.forEach(r=>{
 
 const avgCash=r.cashAverage||0
 const saving=avgCash-r.taxes
-
-let rating=""
-
-if(r.estimatedValue>=3)
-rating="🔥 Redemption eccellente"
-else if(r.estimatedValue>=2)
-rating="⭐ Ottima redemption"
-else if(r.estimatedValue>=1)
-rating="👍 Buona redemption"
-else
-rating="⚠️ Valore debole"
 
 html+=`
 
@@ -256,8 +172,6 @@ html+=`
 
 📊 Valore punti: ${r.estimatedValue} cent/punto<br>
 
-${rating}<br>
-
 📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
 
 <div class="value-bar-container">
@@ -265,10 +179,6 @@ ${rating}<br>
 </div>
 
 🔥 Opportunity Score: ${r.opportunityScore}/100<br>
-
-${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
-
-${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈️ Prenotabile Ora<br>"}
 
 </div>
 
