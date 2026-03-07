@@ -18,24 +18,29 @@ return Math.ceil(airlinePoints*rate)
 
 }
 
+function estimatePoints(region){
+
+if(region==="Europa") return 15000
+if(region==="Nord America") return 35000
+if(region==="Asia") return 45000
+if(region==="Medio Oriente") return 40000
+
+return 45000
+
+}
+
 module.exports = async function handler(req,res){
 
 try{
 
-const {from,maxMR,date} = req.query
-
-if(!from||!maxMR){
-return res.status(400).json({error:"Parametri mancanti"})
-}
+const {from,maxMR,date}=req.query
 
 const parsedMaxMR=parseInt(maxMR)
 
-const filtered = routes.filter(r=>r.from===from)
+const key=process.env.AMADEUS_API_KEY
+const secret=process.env.AMADEUS_API_SECRET
 
-const key = process.env.AMADEUS_API_KEY
-const secret = process.env.AMADEUS_API_SECRET
-
-const tokenResponse = await fetch(
+const tokenResponse=await fetch(
 "https://test.api.amadeus.com/v1/security/oauth2/token",
 {
 method:"POST",
@@ -44,27 +49,59 @@ body:`grant_type=client_credentials&client_id=${key}&client_secret=${secret}`
 }
 )
 
-const tokenData = await tokenResponse.json()
-const accessToken = tokenData.access_token
+const tokenData=await tokenResponse.json()
+const accessToken=tokenData.access_token
 
-if(!accessToken){
-return res.status(500).json({error:"Token Amadeus non ottenuto"})
+async function discoverDestinations(origin){
+
+const response=await fetch(
+`https://test.api.amadeus.com/v1/shopping/flight-destinations?origin=${origin}`,
+{headers:{Authorization:`Bearer ${accessToken}`}}
+)
+
+const data=await response.json()
+
+if(!data.data) return []
+
+return data.data.slice(0,15)
+
 }
 
-async function getCashRange(origin,destination,cabin){
+const discovered=await discoverDestinations(from)
 
-const cacheKey=`${origin}-${destination}-${cabin}-${date||"auto"}`
+const staticRoutes=routes.filter(r=>r.from===from)
+
+const dynamicRoutes=discovered.map(d=>({
+
+from:from,
+
+destinationCode:d.destination,
+destination:d.destination,
+
+region:"Unknown",
+
+program:"Flying Blue",
+
+cabin:"Economy",
+
+points:45000,
+
+taxes:200,
+
+difficulty:2
+
+}))
+
+const filtered=[...staticRoutes,...dynamicRoutes]
+
+async function getCashRange(origin,destination){
+
+const cacheKey=`${origin}-${destination}`
 const now=Date.now()
 
 if(cache[cacheKey]&&(now-cache[cacheKey].timestamp<CACHE_TTL)){
 return cache[cacheKey].data
 }
-
-let travelClass="ECONOMY"
-
-if(cabin==="Business") travelClass="BUSINESS"
-if(cabin==="First") travelClass="FIRST"
-if(cabin==="Premium Economy") travelClass="PREMIUM_ECONOMY"
 
 let dates=[]
 
@@ -85,14 +122,14 @@ dates.push(future.toISOString().split("T")[0])
 
 }
 
-const prices = await Promise.all(dates.map(async(d)=>{
+const prices=await Promise.all(dates.map(async(d)=>{
 
-const response = await fetch(
-`https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${d}&adults=1&max=3&travelClass=${travelClass}`,
+const response=await fetch(
+`https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${d}&adults=1&max=3`,
 {headers:{Authorization:`Bearer ${accessToken}`}}
 )
 
-const data = await response.json()
+const data=await response.json()
 
 if(data.data&&data.data.length>0){
 return Math.min(...data.data.map(f=>parseFloat(f.price.total)))
@@ -102,7 +139,7 @@ return null
 
 }))
 
-const valid = prices.filter(p=>p!==null)
+const valid=prices.filter(p=>p!==null)
 
 if(valid.length===0) return null
 
@@ -118,94 +155,55 @@ return result
 
 }
 
-const enriched = await Promise.all(filtered.map(async(route)=>{
+const enriched=await Promise.all(filtered.map(async(route)=>{
 
-const cashData = await getCashRange(route.from,route.destinationCode,route.cabin)
+const cashData=await getCashRange(route.from,route.destinationCode)
 
-const mrRequired = getMRRequired(route.program,route.points)
+const points=route.points||estimatePoints(route.region)
 
-const mrMissing = mrRequired-parsedMaxMR
+const mrRequired=getMRRequired(route.program,points)
 
-const gapRatio = mrMissing>0?mrMissing/mrRequired:0
+const mrMissing=mrRequired-parsedMaxMR
 
 let value=0
 
 if(cashData&&cashData.average){
-value=((cashData.average-route.taxes)/route.points)*100
+value=((cashData.average-route.taxes)/points)*100
 }
-
-const valueScore=Math.min(100,value*60)
-
-let difficultyScore=70
-
-if(route.difficulty===1)difficultyScore=100
-if(route.difficulty===2)difficultyScore=70
-if(route.difficulty===3)difficultyScore=40
-
-let budgetScore=100
-
-if(mrMissing>0){
-budgetScore=Math.max(5,100-(gapRatio*180))
-}
-
-let longHaulBonus=0
-
-if(route.region==="Asia")longHaulBonus=8
-if(route.region==="Nord America")longHaulBonus=6
-if(route.region==="Medio Oriente")longHaulBonus=4
-
-const opportunityScore =
-valueScore*0.7+
-difficultyScore*0.15+
-budgetScore*0.15+
-longHaulBonus
 
 return{
 
 ...route,
 
-cashMin:cashData?cashData.min.toFixed(2):"Prezzo non disponibile",
-cashMax:cashData?cashData.max.toFixed(2):"Prezzo non disponibile",
-cashAverage:cashData?cashData.average:0,
+destination:route.destination||route.destinationCode,
+
+points,
+
+mrRequired,
+
+mrMissing,
 
 estimatedValue:value.toFixed(2),
 
-opportunityScore:Math.round(opportunityScore),
+cashMin:cashData?cashData.min.toFixed(2):"N/A",
 
-mrRequired,
-mrMissing:mrMissing>0?mrMissing:0,
-gapRatio
+cashMax:cashData?cashData.max.toFixed(2):"N/A",
+
+cashAverage:cashData?cashData.average:0
 
 }
 
 }))
 
-const bestValue = Math.max(...enriched.map(r=>parseFloat(r.estimatedValue)||0))
+enriched.sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))
 
-enriched.forEach(r=>{
+const bookable=enriched.filter(r=>r.mrMissing<=0)
 
-const val=parseFloat(r.estimatedValue)||0
+const almost=enriched.filter(r=>r.mrMissing>0&&r.mrMissing<=20000)
 
-r.valuePercent = bestValue?Math.round((val/bestValue)*100):0
-
-r.isBestValue = val===bestValue
-
-const diff = bestValue-val
-
-r.relativeLoss = Math.max(0,(diff/100)*parsedMaxMR).toFixed(0)
-
-})
-
-enriched.sort((a,b)=>b.opportunityScore-a.opportunityScore)
-
-const bookable=enriched.filter(r=>r.mrMissing===0)
-const almost=enriched.filter(r=>r.mrMissing>0&&r.gapRatio<=0.25)
-const future=enriched.filter(r=>r.gapRatio>0.25)
+const future=enriched.filter(r=>r.mrMissing>20000)
 
 return res.status(200).json({
-
-from,
-maxMR,
 
 sections:{
 bookable,
