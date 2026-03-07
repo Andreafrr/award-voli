@@ -194,6 +194,10 @@ const future=enriched.filter(r=>r.gapRatio>0.25)
 
 const possibleDestinations=enriched.filter(r=>r.mrRequired<=parsedMaxMR)
 
+const bestUseOfPoints=[...possibleDestinations]
+.sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))
+.slice(0,3)
+
 const sweetSpots=enriched
 .filter(r=>parseFloat(r.estimatedValue)>=1.2)
 .sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))
@@ -211,6 +215,8 @@ future
 },
 
 possibleDestinations,
+
+bestUseOfPoints,
 
 bestRedemptionToday: enriched[0],
 
