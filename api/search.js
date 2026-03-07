@@ -37,6 +37,20 @@ const {from,maxMR,date}=req.query
 
 const parsedMaxMR=parseInt(maxMR)
 
+const airportGroups={
+
+IT:["MXP","FCO","VCE","BLQ","NAP"],
+
+MXP:["MXP"],
+FCO:["FCO"],
+VCE:["VCE"],
+BLQ:["BLQ"],
+NAP:["NAP"]
+
+}
+
+const origins=airportGroups[from]||[from]
+
 const key=process.env.AMADEUS_API_KEY
 const secret=process.env.AMADEUS_API_SECRET
 
@@ -67,13 +81,25 @@ return data.data.slice(0,15)
 
 }
 
-const discovered=await discoverDestinations(from)
+let discovered=[]
 
-const staticRoutes=routes.filter(r=>r.from===from)
+for(const origin of origins){
+
+const results=await discoverDestinations(origin)
+
+results.forEach(r=>{
+r.origin=origin
+})
+
+discovered=[...discovered,...results]
+
+}
+
+const staticRoutes=routes.filter(r=>origins.includes(r.from))
 
 const dynamicRoutes=discovered.map(d=>({
 
-from:from,
+from:d.origin,
 
 destinationCode:d.destination,
 destination:d.destination,
@@ -106,7 +132,9 @@ return cache[cacheKey].data
 let dates=[]
 
 if(date){
+
 dates=[date]
+
 }else{
 
 const today=new Date()
@@ -131,7 +159,7 @@ const response=await fetch(
 
 const data=await response.json()
 
-if(data.data&&data.data.length>0){
+if(data.data && data.data.length>0){
 return Math.min(...data.data.map(f=>parseFloat(f.price.total)))
 }
 
@@ -167,7 +195,7 @@ const mrMissing=mrRequired-parsedMaxMR
 
 let value=0
 
-if(cashData&&cashData.average){
+if(cashData && cashData.average){
 value=((cashData.average-route.taxes)/points)*100
 }
 
@@ -186,9 +214,7 @@ mrMissing,
 estimatedValue:value.toFixed(2),
 
 cashMin:cashData?cashData.min.toFixed(2):"N/A",
-
 cashMax:cashData?cashData.max.toFixed(2):"N/A",
-
 cashAverage:cashData?cashData.average:0
 
 }
@@ -197,19 +223,33 @@ cashAverage:cashData?cashData.average:0
 
 enriched.sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))
 
+const bestValue=Math.max(...enriched.map(r=>parseFloat(r.estimatedValue)))
+
+enriched.forEach(r=>{
+
+const value=parseFloat(r.estimatedValue)
+
+r.valuePercent=Math.round((value/bestValue)*100)
+
+const diff=bestValue-value
+
+r.relativeLoss=Math.max(0,(diff/100)*parsedMaxMR).toFixed(0)
+
+})
+
 const bookable=enriched.filter(r=>r.mrMissing<=0)
-
-const almost=enriched.filter(r=>r.mrMissing>0&&r.mrMissing<=20000)
-
+const almost=enriched.filter(r=>r.mrMissing>0 && r.mrMissing<=20000)
 const future=enriched.filter(r=>r.mrMissing>20000)
+
+const bestDeals=[...enriched]
+.filter(r=>parseFloat(r.estimatedValue)>0)
+.slice(0,5)
 
 return res.status(200).json({
 
-sections:{
-bookable,
-almost,
-future
-}
+sections:{bookable,almost,future},
+
+bestDeals
 
 })
 
