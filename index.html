@@ -99,6 +99,7 @@ font-weight:600;
 
 <button onclick="searchFlights()">Dove posso andare?</button>
 
+<div id="bestUse"></div>
 <div id="possibleFlights"></div>
 <div id="sweetSpots"></div>
 <div id="bestAbsolute"></div>
@@ -119,15 +120,55 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
 .then(res=>res.json())
 .then(data=>{
 
-const resultsDiv=document.getElementById("results")
+const bestUseDiv=document.getElementById("bestUse")
+const possibleDiv=document.getElementById("possibleFlights")
+const sweetSpotsDiv=document.getElementById("sweetSpots")
 const bestAbsoluteDiv=document.getElementById("bestAbsolute")
 const bestTodayDiv=document.getElementById("bestToday")
-const sweetSpotsDiv=document.getElementById("sweetSpots")
-const possibleDiv=document.getElementById("possibleFlights")
+const resultsDiv=document.getElementById("results")
 
 let {bookable,almost,future}=data.sections
 
 let all=[...bookable,...almost,...future]
+
+/* BEST USE OF POINTS */
+
+const bestUse=data.bestUseOfPoints
+
+if(bestUse&&bestUse.length>0){
+
+let html=`<div class="card highlight">
+
+⭐ <b>Miglior utilizzo dei tuoi punti</b><br><br>
+`
+
+bestUse.forEach((b,i)=>{
+
+if(i===0){
+
+html+=`
+⭐ <b>${b.destination} (${b.region})</b><br>
+💺 ${b.cabin}<br>
+📊 ${b.estimatedValue} cent/punto<br><br>
+`
+
+}else{
+
+html+=`
+Alternativa: ${b.destination} — ${b.estimatedValue} cent/punto<br><br>
+`
+
+}
+
+})
+
+html+=`</div>`
+
+bestUseDiv.innerHTML=html
+
+}
+
+/* POSSIBLE DESTINATIONS */
 
 const possible=data.possibleDestinations
 
@@ -155,6 +196,8 @@ possibleDiv.innerHTML=html
 
 }
 
+/* SWEET SPOTS */
+
 const sweetSpots=data.sweetSpots
 
 if(sweetSpots&&sweetSpots.length>0){
@@ -180,92 +223,6 @@ html+=`</div>`
 sweetSpotsDiv.innerHTML=html
 
 }
-
-let bestValue=all.find(r=>r.isBestValue)
-
-if(bestValue){
-
-bestAbsoluteDiv.innerHTML=`
-
-<div class="card highlight">
-
-🏆 <b>Miglior valore assoluto</b><br><br>
-
-${bestValue.destination} (${bestValue.region})<br>
-
-💺 ${bestValue.cabin}<br>
-
-📊 ${bestValue.estimatedValue} cent/punto
-
-</div>
-
-`
-
-}
-
-const bestToday=data.bestRedemptionToday
-
-if(bestToday){
-
-bestTodayDiv.innerHTML=`
-
-<div class="card highlight">
-
-🔥 <b>Best Redemption Today</b><br><br>
-
-${bestToday.destination} (${bestToday.region})<br>
-
-💺 ${bestToday.cabin}<br>
-
-📊 ${bestToday.estimatedValue} cent/punto
-
-</div>
-
-`
-
-}
-
-let html=""
-
-function renderSection(title,list){
-
-if(!list||list.length===0) return
-
-html+=`<div class="section-title">${title}</div>`
-
-list.forEach(r=>{
-
-html+=`
-
-<div class="card">
-
-<b>${r.destination}</b> (${r.region})<br><br>
-
-💺 Cabina: <b>${r.cabin}</b><br>
-
-💳 Programma: <b>${r.program}</b><br>
-
-✈️ ${r.points.toLocaleString()} punti compagnia<br>
-
-💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
-
-📊 Valore punti: ${r.estimatedValue} cent/punto<br>
-
-🔥 Opportunity Score: ${r.opportunityScore}/100
-
-</div>
-
-`
-
-})
-
-}
-
-renderSection("✈️ Prenotabili Ora",bookable)
-renderSection("⚖️ Quasi Raggiungibili",almost)
-renderSection("🌍 Obiettivi Futuri",future)
-
-resultsDiv.innerHTML=html
 
 })
 
