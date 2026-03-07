@@ -26,7 +26,7 @@ background:white;
 padding:30px;
 border-radius:16px;
 width:90%;
-max-width:700px;
+max-width:750px;
 margin-left:auto;
 margin-right:auto;
 box-shadow:0 10px 30px rgba(0,0,0,0.05);
@@ -54,7 +54,7 @@ font-weight:600;
 background:white;
 margin:20px auto;
 padding:22px;
-max-width:500px;
+max-width:520px;
 border-radius:14px;
 box-shadow:0 8px 20px rgba(0,0,0,0.06);
 text-align:left;
@@ -68,6 +68,21 @@ border:2px solid gold;
 margin-top:40px;
 font-size:20px;
 font-weight:600;
+}
+
+.value-bar-container{
+margin-top:8px;
+background:#e5e7eb;
+border-radius:6px;
+height:8px;
+width:100%;
+overflow:hidden;
+}
+
+.value-bar{
+height:8px;
+background:#4f46e5;
+border-radius:6px;
 }
 
 </style>
@@ -93,15 +108,20 @@ font-weight:600;
 <option value="First">First</option>
 </select>
 
-<input id="maxPoints" placeholder="MR disponibili (es. 40000)">
+<br>
+
+<input id="maxPoints" placeholder="MR disponibili (es. 70000)">
+
+<br>
+
+<input type="date" id="departureDate">
+
+<input type="date" id="returnDate">
 
 <br>
 
 <button onclick="searchFlights()">Dove posso andare?</button>
 
-<div id="bestUse"></div>
-<div id="possibleFlights"></div>
-<div id="sweetSpots"></div>
 <div id="bestAbsolute"></div>
 <div id="bestToday"></div>
 <div id="results"></div>
@@ -115,114 +135,154 @@ function searchFlights(){
 const from=document.getElementById("from").value
 const cabin=document.getElementById("cabin").value
 const maxPoints=document.getElementById("maxPoints").value
+const departure=document.getElementById("departureDate").value
 
-fetch(`/api/search?from=${from}&maxMR=${maxPoints}`)
+if(!maxPoints){
+alert("Inserisci i MR disponibili")
+return
+}
+
+fetch(`/api/search?from=${from}&maxMR=${maxPoints}&date=${departure}`)
 .then(res=>res.json())
 .then(data=>{
 
-const bestUseDiv=document.getElementById("bestUse")
-const possibleDiv=document.getElementById("possibleFlights")
-const sweetSpotsDiv=document.getElementById("sweetSpots")
+const resultsDiv=document.getElementById("results")
 const bestAbsoluteDiv=document.getElementById("bestAbsolute")
 const bestTodayDiv=document.getElementById("bestToday")
-const resultsDiv=document.getElementById("results")
 
 let {bookable,almost,future}=data.sections
 
 let all=[...bookable,...almost,...future]
 
-/* BEST USE OF POINTS */
+if(cabin!=="all"){
+all=all.filter(r=>r.cabin===cabin)
+}
 
-const bestUse=data.bestUseOfPoints
+let bestValue=all.find(r=>r.isBestValue)
 
-if(bestUse&&bestUse.length>0){
+if(bestValue){
 
-let html=`<div class="card highlight">
+bestAbsoluteDiv.innerHTML=`
 
-⭐ <b>Miglior utilizzo dei tuoi punti</b><br><br>
-`
+<div class="card highlight">
 
-bestUse.forEach((b,i)=>{
+🏆 <b>Miglior valore assoluto</b><br><br>
 
-if(i===0){
+${bestValue.destination} (${bestValue.region})<br>
 
-html+=`
-⭐ <b>${b.destination} (${b.region})</b><br>
-💺 ${b.cabin}<br>
-📊 ${b.estimatedValue} cent/punto<br><br>
-`
+💺 ${bestValue.cabin}<br>
 
-}else{
+📊 Valore punti: ${bestValue.estimatedValue} cent/punto<br>
 
-html+=`
-Alternativa: ${b.destination} — ${b.estimatedValue} cent/punto<br><br>
+📈 Massimizzi il <b>${bestValue.valuePercent}%</b> del valore possibile
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${bestValue.valuePercent}%"></div>
+</div>
+
+💳 Richiede ${bestValue.mrRequired.toLocaleString()} MR
+
+</div>
+
 `
 
 }
+
+let bestNow=bookable[0]
+
+if(bestNow){
+
+bestTodayDiv.innerHTML=`
+
+<div class="card highlight">
+
+🔥 <b>Miglior opportunità prenotabile ora</b><br><br>
+
+${bestNow.destination} (${bestNow.region})<br>
+
+💺 ${bestNow.cabin}<br>
+
+🔥 Opportunity Score: ${bestNow.opportunityScore}/100<br>
+
+📊 Massimizzi circa il <b>${bestNow.valuePercent}%</b> del valore possibile
+
+</div>
+
+`
+
+}
+
+let html=""
+
+function renderSection(title,list){
+
+if(!list||list.length===0) return
+
+html+=`<div class="section-title">${title}</div>`
+
+list.forEach(r=>{
+
+const avgCash=r.cashAverage||0
+const saving=avgCash-r.taxes
+
+let rating=""
+
+if(r.estimatedValue>=3)
+rating="🔥 Redemption eccellente"
+else if(r.estimatedValue>=2)
+rating="⭐ Ottima redemption"
+else if(r.estimatedValue>=1)
+rating="👍 Buona redemption"
+else
+rating="⚠️ Valore debole"
+
+html+=`
+
+<div class="card">
+
+<b>${r.destination}</b> (${r.region})<br><br>
+
+💺 Cabina: <b>${r.cabin}</b><br>
+
+💳 Programma: <b>${r.program}</b><br>
+
+✈️ ${r.points.toLocaleString()} punti compagnia<br>
+
+💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
+
+💰 Prezzo medio cash: €${r.cashMin} - €${r.cashMax}<br>
+
+💸 Risparmio stimato: €${Math.round(saving)}<br><br>
+
+📊 Valore punti: ${r.estimatedValue} cent/punto<br>
+
+${rating}<br>
+
+📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${r.valuePercent}%"></div>
+</div>
+
+🔥 Opportunity Score: ${r.opportunityScore}/100<br>
+
+${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
+
+${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈️ Prenotabile Ora<br>"}
+
+</div>
+
+`
 
 })
 
-html+=`</div>`
-
-bestUseDiv.innerHTML=html
-
 }
 
-/* POSSIBLE DESTINATIONS */
+renderSection("✈️ Prenotabili Ora",bookable)
+renderSection("⚖️ Quasi Raggiungibili",almost)
+renderSection("🌍 Obiettivi Futuri",future)
 
-const possible=data.possibleDestinations
-
-if(possible&&possible.length>0){
-
-let html=`<div class="card highlight">
-
-✈️ <b>Con i tuoi punti puoi volare qui</b><br><br>
-`
-
-possible.slice(0,6).forEach(p=>{
-
-html+=`
-
-${p.destination} (${p.region}) — ${p.cabin}<br>
-💳 ${p.mrRequired.toLocaleString()} MR<br><br>
-
-`
-
-})
-
-html+=`</div>`
-
-possibleDiv.innerHTML=html
-
-}
-
-/* SWEET SPOTS */
-
-const sweetSpots=data.sweetSpots
-
-if(sweetSpots&&sweetSpots.length>0){
-
-let html=`<div class="card highlight">
-
-🔥 <b>Sweet Spots</b><br><br>
-`
-
-sweetSpots.forEach(s=>{
-
-html+=`
-
-${s.destination} (${s.region}) — ${s.cabin}<br>
-📊 ${s.estimatedValue} cent/punto<br><br>
-
-`
-
-})
-
-html+=`</div>`
-
-sweetSpotsDiv.innerHTML=html
-
-}
+resultsDiv.innerHTML=html
 
 })
 
