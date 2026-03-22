@@ -1,265 +1,145 @@
-const { routes } = require("../data/routes.js")
+const { routes } = require("../data/routes.js");
 
-const cache = {}
-const CACHE_TTL = 30 * 60 * 1000
+module.exports = async function handler(req, res) {
 
-function getMRRequired(program, airlinePoints){
+  try {
 
-const rates={
-"Avios (Iberia / BA)":5/4,
-"Flying Blue":3/2,
-"Emirates Skywards":5/2,
-"Singapore KrisFlyer":3/2,
-"ITA Volare":1
-}
+    const { from, maxMR, date } = req.query;
 
-const rate=rates[program]||1
-return Math.ceil(airlinePoints*rate)
+    if (!from || !maxMR) {
+      return res.status(400).json({ error: "Parametri mancanti" });
+    }
 
-}
+    const parsedMaxMR = parseInt(maxMR);
 
-function estimatePoints(region){
+    // supporto IT (tutti aeroporti)
+    const origins = from === "IT"
+      ? ["MXP", "FCO", "VCE", "BLQ", "NAP"]
+      : [from];
 
-if(region==="Europa") return 15000
-if(region==="Nord America") return 35000
-if(region==="Asia") return 45000
-if(region==="Medio Oriente") return 40000
+    const filtered = routes.filter(r => origins.includes(r.from));
 
-return 45000
+    // token Amadeus
+    const tokenResponse = await fetch(
+      "https://test.api.amadeus.com/v1/security/oauth2/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `grant_type=client_credentials&client_id=${process.env.AMADEUS_API_KEY}&client_secret=${process.env.AMADEUS_API_SECRET}`
+      }
+    );
 
-}
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
 
-module.exports = async function handler(req,res){
+    // 👉 funzione date flessibili
+    function getDates(baseDate) {
 
-try{
+      const dates = [];
 
-const {from,maxMR,date}=req.query
+      const base = baseDate ? new Date(baseDate) : new Date();
 
-const parsedMaxMR=parseInt(maxMR)
+      for (let i = -2; i <= 2; i++) {
+        const d = new Date(base);
+        d.setDate(base.getDate() + i);
+        dates.push(d.toISOString().split("T")[0]);
+      }
 
-const airportGroups={
+      return dates;
+    }
 
-IT:["MXP","FCO","VCE","BLQ","NAP"],
+    async function getCashPrice(origin, destination) {
 
-MXP:["MXP"],
-FCO:["FCO"],
-VCE:["VCE"],
-BLQ:["BLQ"],
-NAP:["NAP"]
+      const dates = getDates(date);
 
-}
+      const prices = [];
 
-const origins=airportGroups[from]||[from]
+      for (const d of dates) {
 
-const key=process.env.AMADEUS_API_KEY
-const secret=process.env.AMADEUS_API_SECRET
+        const url = `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${d}&adults=1&max=3`;
 
-const tokenResponse=await fetch(
-"https://test.api.amadeus.com/v1/security/oauth2/token",
-{
-method:"POST",
-headers:{"Content-Type":"application/x-www-form-urlencoded"},
-body:`grant_type=client_credentials&client_id=${key}&client_secret=${secret}`
-}
-)
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
 
-const tokenData=await tokenResponse.json()
-const accessToken=tokenData.access_token
+        const data = await response.json();
 
-async function discoverDestinations(origin){
+        if (data.data && data.data.length > 0) {
+          prices.push(
+            Math.min(...data.data.map(f => parseFloat(f.price.total)))
+          );
+        }
 
-const response=await fetch(
-`https://test.api.amadeus.com/v1/shopping/flight-destinations?origin=${origin}`,
-{headers:{Authorization:`Bearer ${accessToken}`}}
-)
+      }
 
-const data=await response.json()
+      if (prices.length === 0) return null;
 
-if(!data.data) return []
+      const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
 
-return data.data.slice(0,15)
+      return {
+        average: avg
+      };
+    }
 
-}
+    const enriched = await Promise.all(filtered.map(async route => {
 
-let discovered=[]
+      const cash = await getCashPrice(route.from, route.destinationCode);
 
-for(const origin of origins){
+      const mrRequired = Math.ceil(route.points * 1.5);
+      const mrMissing = Math.max(0, mrRequired - parsedMaxMR);
 
-const results=await discoverDestinations(origin)
+      let value = 0;
 
-results.forEach(r=>{
-r.origin=origin
-})
+      if (cash) {
+        value = ((cash.average - route.taxes) / route.points) * 100;
+      }
 
-discovered=[...discovered,...results]
+      return {
+        ...route,
+        cashAverage: cash ? cash.average.toFixed(2) : "N/A",
+        estimatedValue: value.toFixed(2),
+        mrRequired,
+        mrMissing
+      };
 
-}
+    }));
 
-const staticRoutes=routes.filter(r=>origins.includes(r.from))
+    // best value
+    const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
 
-const dynamicRoutes=discovered.map(d=>({
+    enriched.forEach(r => {
 
-from:d.origin,
+      const val = parseFloat(r.estimatedValue);
 
-destinationCode:d.destination,
-destination:d.destination,
+      r.valuePercent = bestValue > 0
+        ? Math.round((val / bestValue) * 100)
+        : 0;
 
-region:"Unknown",
+    });
 
-program:"Flying Blue",
+    // ordinamento
+    enriched.sort((a, b) => b.valuePercent - a.valuePercent);
 
-cabin:"Economy",
+    const bookable = enriched.filter(r => r.mrMissing === 0);
+    const almost = enriched.filter(r => r.mrMissing > 0 && r.mrMissing < 20000);
+    const future = enriched.filter(r => r.mrMissing >= 20000);
 
-points:45000,
+    // 🔥 best deals globali
+    const bestDeals = [...enriched]
+      .filter(r => parseFloat(r.estimatedValue) > 0)
+      .slice(0, 5);
 
-taxes:200,
+    return res.status(200).json({
+      sections: { bookable, almost, future },
+      bestDeals
+    });
 
-difficulty:2
+  } catch (error) {
 
-}))
+    return res.status(500).json({
+      error: "Errore server",
+      details: error.message
+    });
 
-const filtered=[...staticRoutes,...dynamicRoutes]
-
-async function getCashRange(origin,destination){
-
-const cacheKey=`${origin}-${destination}`
-const now=Date.now()
-
-if(cache[cacheKey]&&(now-cache[cacheKey].timestamp<CACHE_TTL)){
-return cache[cacheKey].data
-}
-
-let dates=[]
-
-if(date){
-
-dates=[date]
-
-}else{
-
-const today=new Date()
-
-for(let i=1;i<=3;i++){
-
-const future=new Date(today)
-future.setDate(today.getDate()+i*20)
-
-dates.push(future.toISOString().split("T")[0])
-
-}
-
-}
-
-const prices=await Promise.all(dates.map(async(d)=>{
-
-const response=await fetch(
-`https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${d}&adults=1&max=3`,
-{headers:{Authorization:`Bearer ${accessToken}`}}
-)
-
-const data=await response.json()
-
-if(data.data && data.data.length>0){
-return Math.min(...data.data.map(f=>parseFloat(f.price.total)))
-}
-
-return null
-
-}))
-
-const valid=prices.filter(p=>p!==null)
-
-if(valid.length===0) return null
-
-const min=Math.min(...valid)
-const max=Math.max(...valid)
-const avg=valid.reduce((a,b)=>a+b,0)/valid.length
-
-const result={min,max,average:avg}
-
-cache[cacheKey]={timestamp:now,data:result}
-
-return result
-
-}
-
-const enriched=await Promise.all(filtered.map(async(route)=>{
-
-const cashData=await getCashRange(route.from,route.destinationCode)
-
-const points=route.points||estimatePoints(route.region)
-
-const mrRequired=getMRRequired(route.program,points)
-
-const mrMissing=mrRequired-parsedMaxMR
-
-let value=0
-
-if(cashData && cashData.average){
-value=((cashData.average-route.taxes)/points)*100
-}
-
-return{
-
-...route,
-
-destination:route.destination||route.destinationCode,
-
-points,
-
-mrRequired,
-
-mrMissing,
-
-estimatedValue:value.toFixed(2),
-
-cashMin:cashData?cashData.min.toFixed(2):"N/A",
-cashMax:cashData?cashData.max.toFixed(2):"N/A",
-cashAverage:cashData?cashData.average:0
-
-}
-
-}))
-
-enriched.sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))
-
-const bestValue=Math.max(...enriched.map(r=>parseFloat(r.estimatedValue)))
-
-enriched.forEach(r=>{
-
-const value=parseFloat(r.estimatedValue)
-
-r.valuePercent=Math.round((value/bestValue)*100)
-
-const diff=bestValue-value
-
-r.relativeLoss=Math.max(0,(diff/100)*parsedMaxMR).toFixed(0)
-
-})
-
-const bookable=enriched.filter(r=>r.mrMissing<=0)
-const almost=enriched.filter(r=>r.mrMissing>0 && r.mrMissing<=20000)
-const future=enriched.filter(r=>r.mrMissing>20000)
-
-const bestDeals=[...enriched]
-.filter(r=>parseFloat(r.estimatedValue)>0)
-.slice(0,5)
-
-return res.status(200).json({
-
-sections:{bookable,almost,future},
-
-bestDeals
-
-})
-
-}catch(error){
-
-return res.status(500).json({
-error:"Errore interno server",
-details:error.message
-})
-
-}
-
-}
+  }
+};
