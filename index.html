@@ -11,7 +11,7 @@ body{font-family:sans-serif;background:#f8fafc;text-align:center}
 .card{background:white;padding:20px;margin:15px;border-radius:10px;text-align:left}
 .highlight{border:2px solid gold}
 .timeline{background:#eef2ff;padding:15px;border-radius:10px;margin:20px}
-.notify{margin-top:10px;padding:8px;background:#ecfdf5;border-radius:6px;font-size:14px}
+input{padding:8px;margin-top:8px;width:90%}
 button{margin-top:10px;padding:10px;border:none;background:#4f46e5;color:white;border-radius:6px}
 </style>
 
@@ -71,10 +71,7 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}&cabin=${cabin}&date=${date}&m
 let {bookable,almost,future}=data.sections
 let all=[...bookable,...almost,...future]
 
-// ======================
-// 🔥 TIMELINE (SOLO TEMPI)
-// ======================
-
+// timeline
 const timelineTrips=all
 .filter(r=>r.monthsNeeded!==null)
 .sort((a,b)=>a.monthsNeeded-b.monthsNeeded)
@@ -83,52 +80,30 @@ const timelineTrips=all
 let timelineHTML="<div class='timeline'><b>🧭 Il tuo piano viaggio</b><br><br>"
 
 timelineTrips.forEach(r=>{
-
-timelineHTML+=`
-✈️ ${r.destination}  
-📅 Tra ${r.monthsNeeded} mesi<br><br>
-`
-
+timelineHTML+=`✈️ ${r.destination}<br>📅 Tra ${r.monthsNeeded} mesi<br><br>`
 })
 
 timelineHTML+="</div>"
 
 document.getElementById("timeline").innerHTML=timelineHTML
 
-// ======================
-// 🎯 MIGLIOR VIAGGIO
-// ======================
-
+// miglior viaggio
 const best=all
 .filter(r=>r.monthsNeeded!==null && r.monthsNeeded<=6)
 .sort((a,b)=>b.estimatedValue-a.estimatedValue)[0]
 
 if(best){
-
 document.getElementById("bestRealistic").innerHTML=`
 <div class="card highlight">
 🎯 <b>Miglior viaggio realistico</b><br><br>
 ${best.destination}<br>
-💺 ${best.cabin}<br>
-📊 ${best.estimatedValue} cent/punto<br>
 📅 Tra ${best.monthsNeeded} mesi
 </div>
 `
 }
 
-// ======================
-// LISTA NORMALE + NOTIFICA
-// ======================
-
+// render cards
 let html=""
-
-function notify(destination, months){
-
-alert(`Ti avviseremo quando potrai prenotare ${destination} tra ${months} mesi ✈️`)
-
-// 👉 qui in futuro collegheremo email / database
-
-}
 
 function render(list,title){
 
@@ -141,21 +116,20 @@ html+=`
 
 <b>${r.destination}</b><br>
 
-💺 ${r.cabin}<br>
-
 💳 ${r.mrRequired} MR<br>
 
 📊 ${r.estimatedValue} cent<br>
 
-${r.mrMissing>0?`⚠️ Mancano ${r.mrMissing}`:"✅ Prenotabile ora"}<br>
-
 ${r.monthsNeeded?`📅 Tra ${r.monthsNeeded} mesi<br>`:""}
 
 ${r.monthsNeeded!==null && r.monthsNeeded<=6 
-  ? `<button onclick="notify('${r.destination}', ${r.monthsNeeded})">
-       🔔 Avvisami
-     </button>`
-  : ""}
+? `
+<input placeholder="Inserisci email" id="email-${r.destination}">
+<button onclick="saveAlert('${r.destination}', ${r.monthsNeeded})">
+🔔 Avvisami
+</button>
+`
+:""}
 
 </div>
 `
@@ -163,13 +137,34 @@ ${r.monthsNeeded!==null && r.monthsNeeded<=6
 
 }
 
-render(bookable,"✈️ Ora")
-render(almost,"⚖️ Presto")
-render(future,"🌍 Futuro")
+render(bookable,"Ora")
+render(almost,"Presto")
+render(future,"Futuro")
 
 document.getElementById("results").innerHTML=html
 
 })
+
+}
+
+// salva alert (mock)
+function saveAlert(destination, months){
+
+const input=document.getElementById(`email-${destination}`)
+const email=input.value
+
+if(!email){
+alert("Inserisci email")
+return
+}
+
+console.log({
+destination,
+months,
+email
+})
+
+alert("Perfetto! Ti avviseremo ✈️")
 
 }
 
