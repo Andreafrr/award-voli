@@ -12,14 +12,12 @@ module.exports = async function handler(req, res) {
 
     const parsedMaxMR = parseInt(maxMR);
 
-    // supporto IT (tutti aeroporti)
     const origins = from === "IT"
       ? ["MXP", "FCO", "VCE", "BLQ", "NAP"]
       : [from];
 
     const filtered = routes.filter(r => origins.includes(r.from));
 
-    // token Amadeus
     const tokenResponse = await fetch(
       "https://test.api.amadeus.com/v1/security/oauth2/token",
       {
@@ -32,11 +30,8 @@ module.exports = async function handler(req, res) {
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
 
-    // 👉 funzione date flessibili
     function getDates(baseDate) {
-
       const dates = [];
-
       const base = baseDate ? new Date(baseDate) : new Date();
 
       for (let i = -2; i <= 2; i++) {
@@ -51,7 +46,6 @@ module.exports = async function handler(req, res) {
     async function getCashPrice(origin, destination) {
 
       const dates = getDates(date);
-
       const prices = [];
 
       for (const d of dates) {
@@ -69,16 +63,13 @@ module.exports = async function handler(req, res) {
             Math.min(...data.data.map(f => parseFloat(f.price.total)))
           );
         }
-
       }
 
       if (prices.length === 0) return null;
 
       const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
 
-      return {
-        average: avg
-      };
+      return { average: avg };
     }
 
     const enriched = await Promise.all(filtered.map(async route => {
@@ -97,41 +88,61 @@ module.exports = async function handler(req, res) {
       return {
         ...route,
         cashAverage: cash ? cash.average.toFixed(2) : "N/A",
-        estimatedValue: value.toFixed(2),
+        estimatedValue: parseFloat(value.toFixed(2)),
         mrRequired,
         mrMissing
       };
 
     }));
 
-    // best value
-    const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
+    // best value globale
+    const bestValue = Math.max(...enriched.map(r => r.estimatedValue));
 
     enriched.forEach(r => {
-
-      const val = parseFloat(r.estimatedValue);
-
       r.valuePercent = bestValue > 0
-        ? Math.round((val / bestValue) * 100)
+        ? Math.round((r.estimatedValue / bestValue) * 100)
         : 0;
+    });
+
+    // 🔥 UPGRADE LOGIC
+    enriched.forEach(r => {
+
+      const betterOptions = enriched.filter(x =>
+        x.cabin !== r.cabin &&
+        x.estimatedValue > r.estimatedValue &&
+        x.estimatedValue > 0
+      );
+
+      if (betterOptions.length === 0) return;
+
+      // migliore upgrade
+      const bestUpgrade = betterOptions.sort((a, b) =>
+        b.estimatedValue - a.estimatedValue
+      )[0];
+
+      const valueGain = Math.round(
+        ((bestUpgrade.estimatedValue - r.estimatedValue) / (r.estimatedValue || 1)) * 100
+      );
+
+      r.upgrade = {
+        destination: bestUpgrade.destination,
+        cabin: bestUpgrade.cabin,
+        value: bestUpgrade.estimatedValue,
+        mrRequired: bestUpgrade.mrRequired,
+        mrMissing: bestUpgrade.mrMissing,
+        valueGain
+      };
 
     });
 
-    // ordinamento
     enriched.sort((a, b) => b.valuePercent - a.valuePercent);
 
     const bookable = enriched.filter(r => r.mrMissing === 0);
     const almost = enriched.filter(r => r.mrMissing > 0 && r.mrMissing < 20000);
     const future = enriched.filter(r => r.mrMissing >= 20000);
 
-    // 🔥 best deals globali
-    const bestDeals = [...enriched]
-      .filter(r => parseFloat(r.estimatedValue) > 0)
-      .slice(0, 5);
-
     return res.status(200).json({
-      sections: { bookable, almost, future },
-      bestDeals
+      sections: { bookable, almost, future }
     });
 
   } catch (error) {
