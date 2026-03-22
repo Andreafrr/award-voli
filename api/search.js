@@ -1,10 +1,25 @@
-const { routes } = require("../data/routes.js");
+const { routes } = require("../data/routes.js")
+
+const cache = {};
+const CACHE_TTL = 30 * 60 * 1000;
+
+function getMRRequired(program, airlinePoints) {
+  const conversionRates = {
+    "Avios (Iberia / BA)": 5 / 4,
+    "Flying Blue": 3 / 2,
+    "Emirates Skywards": 5 / 2,
+    "Singapore KrisFlyer": 3 / 2,
+    "ITA Volare": 1
+  };
+
+  return Math.ceil(airlinePoints * (conversionRates[program] || 1));
+}
 
 module.exports = async function handler(req, res) {
 
   try {
 
-    const { from, maxMR, date } = req.query;
+    const { from, maxMR, cabin, date } = req.query;
 
     if (!from || !maxMR) {
       return res.status(400).json({ error: "Parametri mancanti" });
@@ -12,71 +27,70 @@ module.exports = async function handler(req, res) {
 
     const parsedMaxMR = parseInt(maxMR);
 
-    const origins = from === "IT"
-      ? ["MXP", "FCO", "VCE", "BLQ", "NAP"]
-      : [from];
+    // filtro partenza
+    const filtered = from === "ALL"
+      ? routes
+      : routes.filter(r => r.from === from);
 
-    const filtered = routes.filter(r => origins.includes(r.from));
+    const key = process.env.AMADEUS_API_KEY;
+    const secret = process.env.AMADEUS_API_SECRET;
 
-    const tokenResponse = await fetch(
-      "https://test.api.amadeus.com/v1/security/oauth2/token",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `grant_type=client_credentials&client_id=${process.env.AMADEUS_API_KEY}&client_secret=${process.env.AMADEUS_API_SECRET}`
-      }
-    );
+    const tokenRes = await fetch("https://test.api.amadeus.com/v1/security/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `grant_type=client_credentials&client_id=${key}&client_secret=${secret}`
+    });
 
-    const tokenData = await tokenResponse.json();
+    const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
 
-    function getDates(baseDate) {
-      const dates = [];
-      const base = baseDate ? new Date(baseDate) : new Date();
+    async function getCash(origin, destination, cabin) {
 
-      for (let i = -2; i <= 2; i++) {
-        const d = new Date(base);
-        d.setDate(base.getDate() + i);
-        dates.push(d.toISOString().split("T")[0]);
+      const cacheKey = `${origin}-${destination}-${cabin}-${date}`;
+      const now = Date.now();
+
+      if (cache[cacheKey] && now - cache[cacheKey].timestamp < CACHE_TTL) {
+        return cache[cacheKey].data;
       }
 
-      return dates;
-    }
+      try {
 
-    async function getCashPrice(origin, destination) {
+        const cabinMap = {
+          "Economy": "ECONOMY",
+          "Business": "BUSINESS",
+          "First": "FIRST"
+        };
 
-      const dates = getDates(date);
-      const prices = [];
+        const travelClass = cabinMap[cabin] || "ECONOMY";
 
-      for (const d of dates) {
+        const res = await fetch(
+          `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${date}&adults=1&travelClass=${travelClass}&max=3`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
 
-        const url = `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${d}&adults=1&max=3`;
+        const data = await res.json();
 
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
+        if (!data.data || data.data.length === 0) return null;
 
-        const data = await response.json();
+        const prices = data.data.map(f => parseFloat(f.price.total));
+        const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
 
-        if (data.data && data.data.length > 0) {
-          prices.push(
-            Math.min(...data.data.map(f => parseFloat(f.price.total)))
-          );
-        }
+        const result = { average: avg };
+
+        cache[cacheKey] = { timestamp: now, data: result };
+
+        return result;
+
+      } catch {
+        return null;
       }
-
-      if (prices.length === 0) return null;
-
-      const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
-
-      return { average: avg };
     }
 
-    const enriched = await Promise.all(filtered.map(async route => {
+    const enriched = await Promise.all(filtered.map(async (route) => {
 
-      const cash = await getCashPrice(route.from, route.destinationCode);
+      const cash = await getCash(route.from, route.destinationCode, route.cabin);
 
-      const mrRequired = Math.ceil(route.points * 1.5);
+      const mrRequired = getMRRequired(route.program, route.points);
       const mrMissing = Math.max(0, mrRequired - parsedMaxMR);
 
       let value = 0;
@@ -85,72 +99,62 @@ module.exports = async function handler(req, res) {
         value = ((cash.average - route.taxes) / route.points) * 100;
       }
 
+      // fallback intelligente
+      if (!cash) value = 0.2;
+
+      const valueScore = Math.min(100, value * 60);
+
+      let difficultyScore = 70;
+      if (route.difficulty === 1) difficultyScore = 100;
+      if (route.difficulty === 3) difficultyScore = 40;
+
+      const budgetScore = mrMissing === 0 ? 100 : 40;
+
+      let opportunityScore = (
+        valueScore * 0.7 +
+        difficultyScore * 0.15 +
+        budgetScore * 0.15
+      );
+
+      // evita ZERO finto
+      if (opportunityScore < 10) opportunityScore = 10;
+
       return {
         ...route,
-        cashAverage: cash ? cash.average.toFixed(2) : "N/A",
-        estimatedValue: parseFloat(value.toFixed(2)),
+        cashAverage: cash ? cash.average.toFixed(2) : null,
+        estimatedValue: value.toFixed(2),
+        opportunityScore: Math.round(opportunityScore),
         mrRequired,
         mrMissing
       };
 
     }));
 
-    // best value globale
-    const bestValue = Math.max(...enriched.map(r => r.estimatedValue));
+    // miglior valore
+    const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
 
     enriched.forEach(r => {
-      r.valuePercent = bestValue > 0
-        ? Math.round((r.estimatedValue / bestValue) * 100)
-        : 0;
+      const val = parseFloat(r.estimatedValue) || 0;
+      r.valuePercent = bestValue > 0 ? Math.round((val / bestValue) * 100) : 0;
+      r.isBestValue = val === bestValue;
     });
 
-    // 🔥 UPGRADE LOGIC
-    enriched.forEach(r => {
-
-      const betterOptions = enriched.filter(x =>
-        x.cabin !== r.cabin &&
-        x.estimatedValue > r.estimatedValue &&
-        x.estimatedValue > 0
-      );
-
-      if (betterOptions.length === 0) return;
-
-      // migliore upgrade
-      const bestUpgrade = betterOptions.sort((a, b) =>
-        b.estimatedValue - a.estimatedValue
-      )[0];
-
-      const valueGain = Math.round(
-        ((bestUpgrade.estimatedValue - r.estimatedValue) / (r.estimatedValue || 1)) * 100
-      );
-
-      r.upgrade = {
-        destination: bestUpgrade.destination,
-        cabin: bestUpgrade.cabin,
-        value: bestUpgrade.estimatedValue,
-        mrRequired: bestUpgrade.mrRequired,
-        mrMissing: bestUpgrade.mrMissing,
-        valueGain
-      };
-
-    });
-
-    enriched.sort((a, b) => b.valuePercent - a.valuePercent);
+    enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
     const bookable = enriched.filter(r => r.mrMissing === 0);
     const almost = enriched.filter(r => r.mrMissing > 0 && r.mrMissing < 20000);
     const future = enriched.filter(r => r.mrMissing >= 20000);
 
-    return res.status(200).json({
+    res.status(200).json({
+      from,
+      maxMR,
       sections: { bookable, almost, future }
     });
 
   } catch (error) {
-
-    return res.status(500).json({
+    res.status(500).json({
       error: "Errore server",
       details: error.message
     });
-
   }
 };
