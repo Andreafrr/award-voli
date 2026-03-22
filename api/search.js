@@ -19,15 +19,11 @@ module.exports = async function handler(req, res) {
 
   try {
 
-    const { from, maxMR, cabin, date } = req.query;
-
-    if (!from || !maxMR) {
-      return res.status(400).json({ error: "Parametri mancanti" });
-    }
+    const { from, maxMR, cabin, date, monthlyMR } = req.query;
 
     const parsedMaxMR = parseInt(maxMR);
+    const parsedMonthly = parseInt(monthlyMR) || 0;
 
-    // filtro partenza
     const filtered = from === "ALL"
       ? routes
       : routes.filter(r => r.from === from);
@@ -93,13 +89,19 @@ module.exports = async function handler(req, res) {
       const mrRequired = getMRRequired(route.program, route.points);
       const mrMissing = Math.max(0, mrRequired - parsedMaxMR);
 
+      // 🧠 CALCOLO MESI
+      let monthsNeeded = null;
+
+      if (mrMissing > 0 && parsedMonthly > 0) {
+        monthsNeeded = Math.ceil(mrMissing / parsedMonthly);
+      }
+
       let value = 0;
 
       if (cash) {
         value = ((cash.average - route.taxes) / route.points) * 100;
       }
 
-      // fallback intelligente
       if (!cash) value = 0.2;
 
       const valueScore = Math.min(100, value * 60);
@@ -110,13 +112,17 @@ module.exports = async function handler(req, res) {
 
       const budgetScore = mrMissing === 0 ? 100 : 40;
 
+      // 🔥 BONUS FUTURO
+      let futureBonus = 0;
+      if (monthsNeeded !== null && monthsNeeded <= 3) futureBonus = 10;
+      if (monthsNeeded !== null && monthsNeeded <= 6) futureBonus = 5;
+
       let opportunityScore = (
         valueScore * 0.7 +
         difficultyScore * 0.15 +
         budgetScore * 0.15
-      );
+      ) + futureBonus;
 
-      // evita ZERO finto
       if (opportunityScore < 10) opportunityScore = 10;
 
       return {
@@ -125,12 +131,12 @@ module.exports = async function handler(req, res) {
         estimatedValue: value.toFixed(2),
         opportunityScore: Math.round(opportunityScore),
         mrRequired,
-        mrMissing
+        mrMissing,
+        monthsNeeded
       };
 
     }));
 
-    // miglior valore
     const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
 
     enriched.forEach(r => {
@@ -142,12 +148,10 @@ module.exports = async function handler(req, res) {
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
     const bookable = enriched.filter(r => r.mrMissing === 0);
-    const almost = enriched.filter(r => r.mrMissing > 0 && r.mrMissing < 20000);
-    const future = enriched.filter(r => r.mrMissing >= 20000);
+    const almost = enriched.filter(r => r.monthsNeeded !== null && r.monthsNeeded <= 6);
+    const future = enriched.filter(r => r.monthsNeeded === null || r.monthsNeeded > 6);
 
     res.status(200).json({
-      from,
-      maxMR,
       sections: { bookable, almost, future }
     });
 
