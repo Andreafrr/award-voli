@@ -1,34 +1,10 @@
 <script>
 
-function getValueLabel(value){
-
-value=parseFloat(value)
-
-if(value>=2) return "🔥 Ottima redemption"
-if(value>=1) return "👍 Buona redemption"
-if(value>=0.5) return "⚖️ Valore base"
-return "⚠️ Valore basso"
-
-}
-
-function getValueHint(value){
-
-value=parseFloat(value)
-
-if(value<1){
-return "💡 Alcuni voli Business possono superare 2-3 cent/punto"
-}
-
-return ""
-
-}
-
 function searchFlights(){
 
 const from=document.getElementById("from").value
-const cabin=document.getElementById("cabin").value
 const maxPoints=document.getElementById("maxPoints").value
-const monthlyMR=document.getElementById("monthlyMR").value
+const monthlyMR=parseInt(document.getElementById("monthlyMR").value)
 const date=document.getElementById("date").value
 
 fetch(`/api/search?from=${from}&maxMR=${maxPoints}&date=${date}`)
@@ -38,14 +14,6 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}&date=${date}`)
 .then(data=>{
 
 let {bookable,almost,future}=data.sections
-
-let all=[...bookable,...almost,...future]
-
-const bestValue=Math.max(...all.map(r=>parseFloat(r.estimatedValue)))
-
-all.forEach(r=>{
-r.valuePercent=Math.round((parseFloat(r.estimatedValue)/bestValue)*100)
-})
 
 let html=""
 
@@ -57,17 +25,35 @@ html+=`<h2>${title}</h2>`
 
 list.forEach(r=>{
 
-const saving=r.cashAverage!=="N/A"
-? (parseFloat(r.cashAverage)-r.taxes).toFixed(0)
-: 0
+let upgradeHTML=""
+
+if(r.upgrade){
 
 let months=""
 
-if(monthlyMR && r.mrMissing>0){
+if(monthlyMR && r.upgrade.mrMissing>0){
 
-months=Math.ceil(r.mrMissing/monthlyMR)
+const m=Math.ceil(r.upgrade.mrMissing/monthlyMR)
+months=`📅 +${m} mesi`
+}
 
-months=`📅 ~${months} mesi per accumulare`
+upgradeHTML=`
+
+<div style="margin-top:10px;padding:10px;background:#f1f5f9;border-radius:8px;">
+
+💡 <b>Upgrade possibile</b><br>
+
+${r.upgrade.destination} (${r.upgrade.cabin})<br>
+
+📊 ${r.upgrade.value} cent/punto<br>
+
+🚀 +${r.upgrade.valueGain}% valore<br>
+
+${months}
+
+</div>
+
+`
 
 }
 
@@ -77,28 +63,20 @@ html+=`
 
 <b>${r.destination}</b> (${r.region})<br>
 
-✈️ Partenza: ${r.from}<br>
+✈️ ${r.from}<br>
 💺 ${r.cabin}<br><br>
 
 💳 ${r.mrRequired} MR<br>
 
-💰 Prezzo: ${r.cashAverage==="N/A"?"N/D":`€${r.cashAverage}`}<br>
-
-💸 Risparmio: €${saving}<br><br>
+💰 ${r.cashAverage==="N/A"?"N/D":`€${r.cashAverage}`}<br><br>
 
 📊 ${r.estimatedValue} cent/punto<br>
-${getValueLabel(r.estimatedValue)}<br>
-${getValueHint(r.estimatedValue)}<br><br>
 
-📊 ${r.valuePercent}% del valore massimo
+📊 ${r.valuePercent}% del valore massimo<br>
 
-<div class="value-bar-container">
-<div class="value-bar" style="width:${r.valuePercent}%"></div>
-</div>
+${r.mrMissing>0?`⚠️ Mancano ${r.mrMissing} MR<br>`:"✅ Prenotabile ora<br>"}
 
-${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing} MR<br>`:"✅ Prenotabile ora<br>"}
-
-${months}
+${upgradeHTML}
 
 </div>
 
