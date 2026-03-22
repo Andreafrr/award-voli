@@ -1,322 +1,73 @@
-<!DOCTYPE html>
-<html lang="it">
-
-<head>
-
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Comparatore Voli Premio</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-
-<style>
-
-body{
-font-family:'Inter',sans-serif;
-background:linear-gradient(180deg,#eef2ff 0%,#f8fafc 100%);
-margin:0;
-padding:0;
-text-align:center;
-}
-
-.container{
-margin-top:60px;
-background:white;
-padding:30px;
-border-radius:16px;
-width:90%;
-max-width:800px;
-margin-left:auto;
-margin-right:auto;
-box-shadow:0 10px 30px rgba(0,0,0,0.05);
-}
-
-h1{
-font-size:28px;
-font-weight:700;
-}
-
-input,select{
-padding:12px;
-margin:8px;
-width:220px;
-border-radius:8px;
-border:1px solid #ccc;
-}
-
-button{
-padding:12px 24px;
-background:#4f46e5;
-color:white;
-border:none;
-border-radius:10px;
-cursor:pointer;
-font-weight:600;
-}
-
-.card{
-background:white;
-margin:20px auto;
-padding:22px;
-max-width:600px;
-border-radius:14px;
-box-shadow:0 8px 20px rgba(0,0,0,0.06);
-text-align:left;
-}
-
-.highlight{
-border:2px solid gold;
-}
-
-.section-title{
-margin-top:40px;
-font-size:20px;
-font-weight:600;
-}
-
-.value-bar-container{
-margin-top:8px;
-background:#e5e7eb;
-border-radius:6px;
-height:8px;
-width:100%;
-overflow:hidden;
-}
-
-.value-bar{
-height:8px;
-background:#4f46e5;
-border-radius:6px;
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="container">
-
-<h1>🎯 Scopri dove i tuoi punti valgono di più</h1>
-
-<select id="from">
-
-<option value="IT">Italia 🇮🇹 (tutti gli aeroporti)</option>
-
-<option value="MXP">Milano (MXP)</option>
-<option value="FCO">Roma (FCO)</option>
-<option value="VCE">Venezia (VCE)</option>
-<option value="BLQ">Bologna (BLQ)</option>
-<option value="NAP">Napoli (NAP)</option>
-
-</select>
-
-<select id="cabin">
-
-<option value="all">Tutte le cabine</option>
-<option value="Economy">Economy</option>
-<option value="Premium Economy">Premium Economy</option>
-<option value="Business">Business</option>
-<option value="First">First</option>
-
-</select>
-
-<br>
-
-<input id="maxPoints" placeholder="MR disponibili (es. 70000)">
-
-<input id="monthlyMR" placeholder="MR medi accumulati al mese (es. 12000)">
-
-<br>
-
-<input type="date" id="date">
-
-<br>
-
-<button onclick="searchFlights()">Dove posso andare?</button>
-
-<div id="bestAbsolute"></div>
-<div id="bestDeal"></div>
-<div id="bestDeals"></div>
-<div id="results"></div>
-
-</div>
-
 <script>
+
+function getValueLabel(value){
+
+value=parseFloat(value)
+
+if(value>=2) return "🔥 Ottima redemption"
+if(value>=1) return "👍 Buona redemption"
+if(value>=0.5) return "⚖️ Valore base"
+return "⚠️ Valore basso"
+
+}
+
+function getValueHint(value){
+
+value=parseFloat(value)
+
+if(value<1){
+return "💡 Alcuni voli Business possono superare 2-3 cent/punto"
+}
+
+return ""
+
+}
 
 function searchFlights(){
 
 const from=document.getElementById("from").value
 const cabin=document.getElementById("cabin").value
-const maxPoints=parseInt(document.getElementById("maxPoints").value)
-const monthlyMR=parseInt(document.getElementById("monthlyMR").value)
+const maxPoints=document.getElementById("maxPoints").value
+const monthlyMR=document.getElementById("monthlyMR").value
 const date=document.getElementById("date").value
 
-if(!maxPoints){
-
-alert("Inserisci i Membership Rewards disponibili")
-return
-
-}
-
-let url=`/api/search?from=${from}&maxMR=${maxPoints}`
-
-if(date) url+=`&date=${date}`
-
-fetch(url)
+fetch(`/api/search?from=${from}&maxMR=${maxPoints}&date=${date}`)
 
 .then(res=>res.json())
 
 .then(data=>{
 
-const resultsDiv=document.getElementById("results")
-const bestDiv=document.getElementById("bestDeal")
-const bestAbsoluteDiv=document.getElementById("bestAbsolute")
-const bestDealsDiv=document.getElementById("bestDeals")
-
-if(!data.sections){
-
-resultsDiv.innerHTML="<h2>Nessuna destinazione trovata</h2>"
-return
-
-}
-
 let {bookable,almost,future}=data.sections
 
 let all=[...bookable,...almost,...future]
 
-if(cabin!=="all"){
-
-bookable=bookable.filter(r=>r.cabin===cabin)
-almost=almost.filter(r=>r.cabin===cabin)
-future=future.filter(r=>r.cabin===cabin)
-
-all=all.filter(r=>r.cabin===cabin)
-
-}
-
-const bestValue=Math.max(...all.map(r=>parseFloat(r.estimatedValue||0)))
+const bestValue=Math.max(...all.map(r=>parseFloat(r.estimatedValue)))
 
 all.forEach(r=>{
-
-const value=parseFloat(r.estimatedValue||0)
-r.valuePercent=Math.round((value/bestValue)*100)
-
+r.valuePercent=Math.round((parseFloat(r.estimatedValue)/bestValue)*100)
 })
-
-const bestAbsolute=all.find(r=>r.valuePercent===100)
-
-if(bestAbsolute){
-
-bestAbsoluteDiv.innerHTML=`
-
-<div class="card highlight">
-
-🏆 <b>Miglior valore assoluto</b><br><br>
-
-${bestAbsolute.destination} (${bestAbsolute.region})<br>
-
-✈️ Partenza: ${bestAbsolute.from}<br>
-
-💺 ${bestAbsolute.cabin}<br>
-
-📊 Valore punti: ${bestAbsolute.estimatedValue} cent/punto<br>
-
-📈 Massimizzi il <b>${bestAbsolute.valuePercent}%</b> del valore possibile
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${bestAbsolute.valuePercent}%"></div>
-</div>
-
-💳 Richiede ${bestAbsolute.mrRequired.toLocaleString()} MR
-
-</div>
-
-`
-
-}
-
-let bestNow=bookable[0]
-
-if(bestNow){
-
-bestDiv.innerHTML=`
-
-<div class="card highlight">
-
-🔥 <b>Miglior opportunità prenotabile ora</b><br><br>
-
-${bestNow.destination} (${bestNow.region})<br>
-
-✈️ Partenza: ${bestNow.from}<br>
-
-💺 ${bestNow.cabin}<br>
-
-🔥 Opportunity Score: ${bestNow.opportunityScore||0}/100<br>
-
-📊 Massimizzi circa il <b>${bestNow.valuePercent}%</b> del valore possibile
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${bestNow.valuePercent}%"></div>
-</div>
-
-</div>
-
-`
-
-}
-
-if(data.bestDeals){
-
-let dealsHTML=`<div class="section-title">🔥 Migliori redemption trovate</div>`
-
-data.bestDeals.forEach(d=>{
-
-dealsHTML+=`
-
-<div class="card">
-
-<b>${d.destination}</b><br>
-
-✈️ Partenza: ${d.from}<br>
-
-💺 ${d.cabin}<br>
-
-📊 Valore punti: ${d.estimatedValue} cent/punto<br>
-
-💳 Richiede ${d.mrRequired.toLocaleString()} MR
-
-</div>
-
-`
-
-})
-
-bestDealsDiv.innerHTML=dealsHTML
-
-}
 
 let html=""
 
-function renderSection(title,list){
+function render(list,title){
 
-if(!list||list.length===0) return
+if(!list.length) return
 
-html+=`<div class="section-title">${title}</div>`
+html+=`<h2>${title}</h2>`
 
 list.forEach(r=>{
 
-const avgCash=parseFloat(r.cashAverage||0)
-const saving=Math.max(0,avgCash-r.taxes)
+const saving=r.cashAverage!=="N/A"
+? (parseFloat(r.cashAverage)-r.taxes).toFixed(0)
+: 0
 
-let monthsText=""
+let months=""
 
 if(monthlyMR && r.mrMissing>0){
 
-const months=Math.ceil(r.mrMissing/monthlyMR)
+months=Math.ceil(r.mrMissing/monthlyMR)
 
-monthsText=`📅 Circa ${months} mesi per accumulare i punti mancanti<br>`
+months=`📅 ~${months} mesi per accumulare`
 
 }
 
@@ -326,35 +77,28 @@ html+=`
 
 <b>${r.destination}</b> (${r.region})<br>
 
-✈️ Partenza: ${r.from}<br><br>
+✈️ Partenza: ${r.from}<br>
+💺 ${r.cabin}<br><br>
 
-💺 Cabina: <b>${r.cabin}</b><br>
+💳 ${r.mrRequired} MR<br>
 
-💳 Programma: <b>${r.program}</b><br>
+💰 Prezzo: ${r.cashAverage==="N/A"?"N/D":`€${r.cashAverage}`}<br>
 
-✈️ ${r.points.toLocaleString()} punti compagnia<br>
+💸 Risparmio: €${saving}<br><br>
 
-💳 ${r.mrRequired.toLocaleString()} MR richiesti<br><br>
+📊 ${r.estimatedValue} cent/punto<br>
+${getValueLabel(r.estimatedValue)}<br>
+${getValueHint(r.estimatedValue)}<br><br>
 
-💰 Prezzo medio cash: ${r.cashMin==="N/A"?"Prezzo non disponibile":`€${r.cashMin}`}<br>
-
-💸 Risparmio stimato: €${saving.toFixed(0)}<br><br>
-
-📊 Valore punti: ${r.estimatedValue||0} cent/punto<br>
-
-📊 Massimizzi circa il <b>${r.valuePercent}%</b> del valore massimo
+📊 ${r.valuePercent}% del valore massimo
 
 <div class="value-bar-container">
 <div class="value-bar" style="width:${r.valuePercent}%"></div>
 </div>
 
-🔥 Opportunity Score: ${r.opportunityScore||0}/100<br>
+${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing} MR<br>`:"✅ Prenotabile ora<br>"}
 
-${r.relativeLoss>0?`💸 Rinunci a circa <b>€${r.relativeLoss}</b> rispetto alla miglior alternativa<br>`:""}
-
-${r.mrMissing>0?`⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>`:"✈️ Prenotabile Ora<br>"}
-
-${monthsText}
+${months}
 
 </div>
 
@@ -364,24 +108,14 @@ ${monthsText}
 
 }
 
-renderSection("✈️ Prenotabili Ora",bookable)
-renderSection("⚖️ Quasi Raggiungibili",almost)
-renderSection("🌍 Obiettivi Futuri",future)
+render(bookable,"✈️ Prenotabili ora")
+render(almost,"⚖️ Quasi raggiungibili")
+render(future,"🌍 Obiettivi futuri")
 
-resultsDiv.innerHTML=html
-
-})
-
-.catch(()=>{
-
-document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>"
+document.getElementById("results").innerHTML=html
 
 })
 
 }
 
 </script>
-
-</body>
-
-</html>
