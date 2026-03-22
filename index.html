@@ -1,26 +1,64 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparatore Voli Premio</title>
+
+<style>
+body{font-family:sans-serif;background:#f8fafc;text-align:center}
+.container{margin:40px auto;max-width:800px}
+.card{background:white;padding:20px;margin:15px;border-radius:10px;text-align:left}
+.highlight{border:2px solid gold}
+.value-bar{height:6px;background:#4f46e5}
+.value-bar-container{background:#ddd;height:6px;border-radius:4px}
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🎯 Scopri dove i tuoi punti valgono di più</h1>
+
+<select id="from">
+<option value="IT">Italia 🇮🇹</option>
+<option value="MXP">Milano</option>
+<option value="FCO">Roma</option>
+</select>
+
+<select id="cabin">
+<option value="Economy">Economy</option>
+<option value="Business">Business</option>
+</select>
+
+<br>
+
+<input id="maxPoints" placeholder="MR disponibili">
+<input id="monthlyMR" placeholder="MR/mese">
+
+<br>
+
+<input type="date" id="date">
+
+<br>
+
+<button onclick="searchFlights()">Cerca</button>
+
+<div id="bestRealistic"></div>
+<div id="results"></div>
+
+</div>
+
 <script>
 
-function getValueLabel(value){
-
-value=parseFloat(value)
-
-if(value>=2) return "🔥 Ottima redemption"
-if(value>=1) return "👍 Buona redemption"
-if(value>=0.5) return "⚖️ Valore base"
-return "⚠️ Valore basso"
-
-}
-
-function getValueHint(value){
-
-value=parseFloat(value)
-
-if(value<1){
-return "💡 Alcuni voli Business possono superare 2-3 cent/punto"
-}
-
-return ""
-
+function getValueLabel(v){
+v=parseFloat(v)
+if(v>=2) return "🔥 Ottima"
+if(v>=1) return "👍 Buona"
+if(v>=0.5) return "⚖️ Base"
+return "⚠️ Bassa"
 }
 
 function searchFlights(){
@@ -28,98 +66,69 @@ function searchFlights(){
 const from=document.getElementById("from").value
 const cabin=document.getElementById("cabin").value
 const maxPoints=document.getElementById("maxPoints").value
-const monthlyMR=parseInt(document.getElementById("monthlyMR").value)
+const monthlyMR=document.getElementById("monthlyMR").value
 const date=document.getElementById("date").value
 
 fetch(`/api/search?from=${from}&maxMR=${maxPoints}&cabin=${cabin}&date=${date}&monthlyMR=${monthlyMR}`)
 
 .then(res=>res.json())
-
 .then(data=>{
 
 let {bookable,almost,future}=data.sections
-
 let all=[...bookable,...almost,...future]
 
-const bestValue=Math.max(...all.map(r=>parseFloat(r.estimatedValue||0)))
+// 🔥 miglior viaggio realistico
+const best=all
+.filter(r=>r.monthsNeeded!==null && r.monthsNeeded<=6)
+.sort((a,b)=>b.estimatedValue-a.estimatedValue)[0]
 
-all.forEach(r=>{
-r.valuePercent=Math.round((parseFloat(r.estimatedValue)/bestValue)*100)
-})
+if(best){
+
+document.getElementById("bestRealistic").innerHTML=`
+<div class="card highlight">
+🎯 <b>Miglior viaggio realistico</b><br><br>
+${best.destination}<br>
+💺 ${best.cabin}<br>
+📊 ${best.estimatedValue} cent/punto<br>
+📅 ${best.monthsNeeded} mesi
+</div>
+`
+}
 
 let html=""
 
 function render(list,title){
 
-if(!list.length) return
-
 html+=`<h2>${title}</h2>`
 
 list.forEach(r=>{
 
-const saving=r.cashAverage
-? (parseFloat(r.cashAverage)-r.taxes).toFixed(0)
-: 0
-
-let monthsText=""
-
-if(r.monthsNeeded !== null){
-monthsText=`📅 Circa <b>${r.monthsNeeded} mesi</b> per accumulare i punti mancanti<br>`
-}
-
 html+=`
-
 <div class="card">
-
-<b>${r.destination}</b> (${r.region})<br>
-
-✈️ Partenza: ${r.from}<br>
-💺 ${r.cabin}<br><br>
-
-💳 ${r.mrRequired.toLocaleString()} MR<br>
-
-💰 ${r.cashAverage ? `€${r.cashAverage}` : "Prezzo non disponibile"}<br>
-
-💸 Risparmio: €${saving}<br><br>
-
-📊 ${r.estimatedValue} cent/punto<br>
+<b>${r.destination}</b><br>
+💺 ${r.cabin}<br>
+💳 ${r.mrRequired} MR<br>
+📊 ${r.estimatedValue} cent<br>
 ${getValueLabel(r.estimatedValue)}<br>
-${getValueHint(r.estimatedValue)}<br><br>
-
-📊 ${r.valuePercent}% del valore massimo
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${r.valuePercent}%"></div>
+${r.mrMissing>0?`⚠️ Mancano ${r.mrMissing}`:"✅ Ora"}<br>
+${r.monthsNeeded?`📅 ${r.monthsNeeded} mesi`:""}
 </div>
-
-${r.mrMissing>0 
-  ? `⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>` 
-  : "✈️ Prenotabile Ora<br>"}
-
-${monthsText}
-
-</div>
-
 `
-
 })
 
 }
 
-render(bookable,"✈️ Prenotabili ora")
-render(almost,"⚖️ Raggiungibili a breve")
-render(future,"🌍 Obiettivi futuri")
+render(bookable,"Ora")
+render(almost,"Presto")
+render(future,"Futuro")
 
 document.getElementById("results").innerHTML=html
-
-})
-
-.catch(()=>{
-
-document.getElementById("results").innerHTML="<h2>Errore nella ricerca</h2>"
 
 })
 
 }
 
 </script>
+
+</body>
+</html>
