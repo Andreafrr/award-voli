@@ -3,6 +3,7 @@ const { routes } = require("../data/routes.js");
 const cache = {};
 const CACHE_TTL = 30 * 60 * 1000;
 
+// 🎯 Conversione MR
 function getMRRequired(program, airlinePoints) {
   const rates = {
     "Avios (Iberia / BA)": 5 / 4,
@@ -14,8 +15,32 @@ function getMRRequired(program, airlinePoints) {
   return Math.ceil(airlinePoints * (rates[program] || 1));
 }
 
+// 🧠 VALORI INTELLIGENTI (fallback realistico)
+function getFallbackValue(route) {
+
+  const regionBase = {
+    "Europa": 0.6,
+    "Nord America": 0.8,
+    "Asia": 1.2,
+    "Medio Oriente": 0.7
+  };
+
+  const cabinMultiplier = {
+    "Economy": 1,
+    "Business": 2.2,
+    "First": 3
+  };
+
+  let base = regionBase[route.region] || 0.7;
+  let multiplier = cabinMultiplier[route.cabin] || 1;
+
+  return base * multiplier;
+}
+
 module.exports = async function handler(req, res) {
+
   try {
+
     const { from, maxMR, cabin, date, monthlyMR } = req.query;
 
     const parsedMaxMR = parseInt(maxMR);
@@ -26,8 +51,13 @@ module.exports = async function handler(req, res) {
         ? ["MXP", "FCO", "VCE", "BLQ", "NAP"]
         : [from];
 
-    const filtered = routes.filter(r => origins.includes(r.from));
+    let filtered = routes.filter(r => origins.includes(r.from));
 
+    if (cabin && cabin !== "all") {
+      filtered = filtered.filter(r => r.cabin === cabin);
+    }
+
+    // 🔐 Token Amadeus
     const tokenRes = await fetch(
       "https://test.api.amadeus.com/v1/security/oauth2/token",
       {
@@ -40,7 +70,7 @@ module.exports = async function handler(req, res) {
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
 
-    // 🔎 date flessibili ±2 giorni
+    // 📅 date flessibili
     function getDates(baseDate) {
       const base = baseDate ? new Date(baseDate) : new Date();
       const dates = [];
@@ -55,6 +85,7 @@ module.exports = async function handler(req, res) {
     }
 
     async function getCash(origin, destination, cabin) {
+
       const cacheKey = `${origin}-${destination}-${cabin}-${date}`;
       const now = Date.now();
 
@@ -103,6 +134,7 @@ module.exports = async function handler(req, res) {
 
     const enriched = await Promise.all(
       filtered.map(async route => {
+
         const cash = await getCash(
           route.from,
           route.destinationCode,
@@ -112,20 +144,27 @@ module.exports = async function handler(req, res) {
         const mrRequired = getMRRequired(route.program, route.points);
         const mrMissing = Math.max(0, mrRequired - parsedMaxMR);
 
+        // 📅 mesi necessari
         let monthsNeeded = null;
         if (mrMissing > 0 && parsedMonthly > 0) {
           monthsNeeded = Math.ceil(mrMissing / parsedMonthly);
         }
 
+        // 🎯 VALUE CALCULATION
         let value = 0;
 
         if (cash) {
           value = ((cash.average - route.taxes) / route.points) * 100;
+        } else {
+          value = getFallbackValue(route);
         }
 
-        if (!cash) value = 0.2;
+        // 🛑 evita valori assurdi
+        if (value < 0) value = 0;
+        if (value > 5) value = 5;
 
-        const valueScore = Math.min(100, value * 60);
+        // 🎯 SCORE
+        const valueScore = Math.min(100, value * 50);
 
         let difficultyScore = 70;
         if (route.difficulty === 1) difficultyScore = 100;
@@ -143,8 +182,6 @@ module.exports = async function handler(req, res) {
           budgetScore * 0.15 +
           futureBonus;
 
-        if (opportunityScore < 10) opportunityScore = 10;
-
         return {
           ...route,
           cashAverage: cash ? cash.average.toFixed(2) : null,
@@ -154,35 +191,40 @@ module.exports = async function handler(req, res) {
           mrMissing,
           monthsNeeded
         };
+
       })
     );
 
+    // 📊 best value
     const bestValue = Math.max(
       ...enriched.map(r => parseFloat(r.estimatedValue))
     );
 
     enriched.forEach(r => {
       const val = parseFloat(r.estimatedValue) || 0;
-      r.valuePercent = bestValue > 0 ? Math.round((val / bestValue) * 100) : 0;
+      r.valuePercent = bestValue > 0
+        ? Math.round((val / bestValue) * 100)
+        : 0;
     });
 
+    // 🔥 ORDINE
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
     const bookable = enriched.filter(r => r.mrMissing === 0);
-    const almost = enriched.filter(
-      r => r.monthsNeeded !== null && r.monthsNeeded <= 6
-    );
-    const future = enriched.filter(
-      r => r.monthsNeeded === null || r.monthsNeeded > 6
-    );
+    const almost = enriched.filter(r => r.monthsNeeded !== null && r.monthsNeeded <= 6);
+    const future = enriched.filter(r => r.monthsNeeded === null || r.monthsNeeded > 6);
 
     res.status(200).json({
       sections: { bookable, almost, future }
     });
+
   } catch (error) {
+
     res.status(500).json({
       error: "Errore server",
       details: error.message
     });
+
   }
+
 };
