@@ -147,8 +147,7 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}&cabin=${cabin}&date=${date}&m
 let {bookable,almost,future}=data.sections
 let all=[...bookable,...almost,...future]
 
-// ================= TIMELINE =================
-
+// ===== TIMELINE =====
 const timelineTrips=all
 .filter(r=>r.monthsNeeded!==null)
 .sort((a,b)=>a.monthsNeeded-b.monthsNeeded)
@@ -161,11 +160,9 @@ timelineHTML+=`✈️ ${r.destination}<br>📅 Tra ${r.monthsNeeded} mesi<br><br
 })
 
 timelineHTML+="</div>"
-
 document.getElementById("timeline").innerHTML=timelineHTML
 
-// ================= BEST REALISTIC =================
-
+// ===== BEST =====
 const best=all
 .filter(r=>r.monthsNeeded!==null && r.monthsNeeded<=6)
 .sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))[0]
@@ -182,8 +179,7 @@ ${best.destination} (${best.region})<br>
 `
 }
 
-// ================= VALUE PERCENT =================
-
+// ===== VALUE % =====
 const bestValue=Math.max(...all.map(r=>parseFloat(r.estimatedValue||0)))
 
 all.forEach(r=>{
@@ -192,8 +188,7 @@ r.valuePercent=bestValue>0
 : 0
 })
 
-// ================= RENDER =================
-
+// ===== RENDER =====
 let html=""
 
 function renderSection(title,list){
@@ -209,7 +204,6 @@ const saving=r.cashAverage
 : 0
 
 html+=`
-
 <div class="card">
 
 <b>${r.destination}</b> (${r.region})<br>
@@ -217,77 +211,4 @@ html+=`
 
 💳 ${r.mrRequired.toLocaleString()} MR<br>
 
-💰 ${r.cashAverage ? `€${r.cashAverage}` : "Prezzo non disponibile"}<br>
-💸 Risparmio: €${saving}<br><br>
-
-${r.estimatedValue>0 
-? `📊 ${r.estimatedValue} cent/punto`
-: "📊 Dati non disponibili"}<br>
-
-${getValueLabel(r.estimatedValue)}<br><br>
-
-📊 ${r.valuePercent}% del valore massimo
-
-<div class="value-bar-container">
-<div class="value-bar" style="width:${r.valuePercent}%"></div>
-</div><br>
-
-${r.mrMissing>0 
-? `⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>` 
-: "✈️ Prenotabile ora<br>"}
-
-${r.monthsNeeded!==null 
-? `📅 Tra ${r.monthsNeeded} mesi<br>` 
-: ""}
-
-${r.monthsNeeded!==null && r.monthsNeeded<=6 
-? `
-<input placeholder="Inserisci email" id="email-${r.destination}">
-<button onclick="saveAlert('${r.destination}', ${r.monthsNeeded})">
-🔔 Avvisami
-</button>
-`
-:""}
-
-</div>
-
-`
-})
-
-}
-
-renderSection("✈️ Prenotabili ora",bookable)
-renderSection("⚖️ Raggiungibili a breve",almost)
-renderSection("🌍 Obiettivi futuri",future)
-
-document.getElementById("results").innerHTML=html
-
-})
-
-}
-
-// ================= EMAIL =================
-
-function saveAlert(destination, months){
-
-const email=document.getElementById(`email-${destination}`).value
-
-if(!email){
-alert("Inserisci email")
-return
-}
-
-fetch("/api/notify",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({email,destination,months})
-})
-.then(()=>alert("Perfetto! Ti avviseremo ✈️"))
-.catch(()=>alert("Errore invio"))
-
-}
-
-</script>
-
-</body>
-</html>
+💰 ${r.cashAverage ? `€${r.cashAverage}` : "Prezzo non disponibile
