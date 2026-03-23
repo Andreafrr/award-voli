@@ -92,15 +92,23 @@ margin-top:10px;
 
 <h1>🎯 Scopri dove i tuoi punti valgono di più</h1>
 
+<!-- PARTENZA -->
 <select id="from">
-<option value="IT">Italia 🇮🇹</option>
-<option value="MXP">Milano</option>
-<option value="FCO">Roma</option>
+<option value="IT">Italia 🇮🇹 (tutti gli aeroporti)</option>
+<option value="MXP">Milano (MXP)</option>
+<option value="FCO">Roma (FCO)</option>
+<option value="VCE">Venezia (VCE)</option>
+<option value="BLQ">Bologna (BLQ)</option>
+<option value="NAP">Napoli (NAP)</option>
 </select>
 
+<!-- CABINA -->
 <select id="cabin">
+<option value="all">Tutte le cabine</option>
 <option value="Economy">Economy</option>
+<option value="Premium Economy">Premium Economy</option>
 <option value="Business">Business</option>
+<option value="First">First</option>
 </select>
 
 <br>
@@ -147,7 +155,15 @@ fetch(`/api/search?from=${from}&maxMR=${maxPoints}&cabin=${cabin}&date=${date}&m
 let {bookable,almost,future}=data.sections
 let all=[...bookable,...almost,...future]
 
-// ===== TIMELINE =====
+// filtro cabine frontend
+if(cabin!=="all"){
+bookable=bookable.filter(r=>r.cabin===cabin)
+almost=almost.filter(r=>r.cabin===cabin)
+future=future.filter(r=>r.cabin===cabin)
+all=all.filter(r=>r.cabin===cabin)
+}
+
+// TIMELINE
 const timelineTrips=all
 .filter(r=>r.monthsNeeded!==null)
 .sort((a,b)=>a.monthsNeeded-b.monthsNeeded)
@@ -162,7 +178,7 @@ timelineHTML+=`✈️ ${r.destination}<br>📅 Tra ${r.monthsNeeded} mesi<br><br
 timelineHTML+="</div>"
 document.getElementById("timeline").innerHTML=timelineHTML
 
-// ===== BEST =====
+// BEST
 const best=all
 .filter(r=>r.monthsNeeded!==null && r.monthsNeeded<=6)
 .sort((a,b)=>parseFloat(b.estimatedValue)-parseFloat(a.estimatedValue))[0]
@@ -172,6 +188,7 @@ document.getElementById("bestRealistic").innerHTML=`
 <div class="card highlight">
 🎯 <b>Miglior viaggio realistico</b><br><br>
 ${best.destination} (${best.region})<br>
+✈️ Partenza: ${best.from}<br>
 💺 ${best.cabin}<br>
 📊 ${best.estimatedValue} cent/punto<br>
 📅 Tra ${best.monthsNeeded} mesi
@@ -179,7 +196,7 @@ ${best.destination} (${best.region})<br>
 `
 }
 
-// ===== VALUE % =====
+// VALUE %
 const bestValue=Math.max(...all.map(r=>parseFloat(r.estimatedValue||0)))
 
 all.forEach(r=>{
@@ -188,7 +205,7 @@ r.valuePercent=bestValue>0
 : 0
 })
 
-// ===== RENDER =====
+// RENDER
 let html=""
 
 function renderSection(title,list){
@@ -207,8 +224,85 @@ html+=`
 <div class="card">
 
 <b>${r.destination}</b> (${r.region})<br>
+✈️ Partenza: ${r.from}<br>
 💺 ${r.cabin}<br><br>
 
 💳 ${r.mrRequired.toLocaleString()} MR<br>
 
-💰 ${r.cashAverage ? `€${r.cashAverage}` : "Prezzo non disponibile
+💰 ${r.cashAverage ? `€${r.cashAverage}` : "Prezzo non disponibile"}<br>
+💸 Risparmio: €${saving}<br><br>
+
+${r.estimatedValue>0 
+? `📊 ${r.estimatedValue} cent/punto`
+: "📊 Dati non disponibili"}<br>
+
+${getValueLabel(r.estimatedValue)}<br><br>
+
+📊 ${r.valuePercent}% del valore massimo
+
+<div class="value-bar-container">
+<div class="value-bar" style="width:${r.valuePercent}%"></div>
+</div><br>
+
+${r.mrMissing>0 
+? `⚠️ Ti mancano ${r.mrMissing.toLocaleString()} MR<br>` 
+: "✈️ Prenotabile ora<br>"}
+
+${r.monthsNeeded!==null 
+? `📅 Tra ${r.monthsNeeded} mesi<br>` 
+: ""}
+
+${r.monthsNeeded!==null && r.monthsNeeded<=6 
+? `
+<input placeholder="Inserisci email" id="email-${r.destination}">
+<button onclick="saveAlert('${r.destination}', ${r.monthsNeeded}, '${r.from}', '${r.destinationCode}', '${r.cabin}')">
+🔔 Avvisami
+</button>
+`
+:""}
+
+</div>
+`
+})
+
+}
+
+renderSection("✈️ Prenotabili ora",bookable)
+renderSection("⚖️ Raggiungibili a breve",almost)
+renderSection("🌍 Obiettivi futuri",future)
+
+document.getElementById("results").innerHTML=html
+
+})
+
+}
+
+function saveAlert(destination, months, origin, destCode, cabin){
+
+const email=document.getElementById(`email-${destination}`).value
+
+if(!email){
+alert("Inserisci email")
+return
+}
+
+fetch("/api/save-trip",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({email,destination,origin,destCode,cabin})
+})
+
+fetch("/api/notify",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({email,destination,months})
+})
+
+.then(()=>alert("Perfetto! Ti avviseremo ✈️"))
+
+}
+
+</script>
+
+</body>
+</html>
