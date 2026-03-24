@@ -30,22 +30,32 @@ export default async function handler(req, res) {
       const prices = data.data.map(f => parseFloat(f.price.total));
       const newPrice = Math.min(...prices);
 
-      // 🎯 nuova value
+      // 🔥 calcolo valore reale
       const newValue = ((newPrice - 100) / 50000) * 100;
 
       let sendEmail = false;
-      let reason = "";
+      let subject = "";
+      let label = "";
 
-      // 🔥 prezzo sceso
-      if (newPrice < trip.price * 0.85) {
+      // 💥 BEST DEAL
+      if (newValue >= 2) {
         sendEmail = true;
-        reason = "Prezzo sceso";
+        subject = `🔥 BEST DEAL per ${trip.destination}`;
+        label = "Valore eccezionale";
       }
 
-      // 🔥 valore migliorato
-      if (newValue > trip.value * 1.2) {
+      // 💸 prezzo sceso
+      else if (newPrice < trip.price * 0.85) {
         sendEmail = true;
-        reason = "Valore migliorato";
+        subject = `💸 Prezzo sceso per ${trip.destination}`;
+        label = "Prezzo in calo";
+      }
+
+      // 📈 valore migliorato
+      else if (newValue > trip.value * 1.25) {
+        sendEmail = true;
+        subject = `📈 Valore migliorato per ${trip.destination}`;
+        label = "Valore in crescita";
       }
 
       if (sendEmail) {
@@ -57,13 +67,19 @@ export default async function handler(req, res) {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            from: "Viaggi <onboarding@resend.dev>",
+            from: "Voli Reward <onboarding@resend.dev>",
             to: trip.email,
-            subject: `🔥 ${reason} per ${trip.destination}`,
+            subject: subject,
             html: `
-              <h2>Ottima notizia ✈️</h2>
-              <p>${trip.destination}</p>
-              <p>Prezzo: €${newPrice}</p>
+              <h2>${trip.destination}</h2>
+              <p><b>${label}</b></p>
+
+              <p>💰 Prezzo: €${newPrice}</p>
+              <p>📊 Valore: ${newValue.toFixed(2)} cent/punto</p>
+
+              <hr>
+
+              <p>✈️ È un buon momento per prenotare</p>
             `
           })
         });
