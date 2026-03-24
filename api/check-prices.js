@@ -28,10 +28,27 @@ export default async function handler(req, res) {
       if (!data.data || data.data.length === 0) continue;
 
       const prices = data.data.map(f => parseFloat(f.price.total));
-      const minPrice = Math.min(...prices);
+      const newPrice = Math.min(...prices);
 
-      // 🔥 trigger email se prezzo basso
-      if (minPrice < 400) {
+      // 🎯 nuova value
+      const newValue = ((newPrice - 100) / 50000) * 100;
+
+      let sendEmail = false;
+      let reason = "";
+
+      // 🔥 prezzo sceso
+      if (newPrice < trip.price * 0.85) {
+        sendEmail = true;
+        reason = "Prezzo sceso";
+      }
+
+      // 🔥 valore migliorato
+      if (newValue > trip.value * 1.2) {
+        sendEmail = true;
+        reason = "Valore migliorato";
+      }
+
+      if (sendEmail) {
 
         await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -42,10 +59,11 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             from: "Viaggi <onboarding@resend.dev>",
             to: trip.email,
-            subject: `🔥 Prezzo basso per ${trip.destination}`,
+            subject: `🔥 ${reason} per ${trip.destination}`,
             html: `
-              <h2>Ottimo momento ✈️</h2>
-              <p>${trip.destination} ora costa circa €${minPrice}</p>
+              <h2>Ottima notizia ✈️</h2>
+              <p>${trip.destination}</p>
+              <p>Prezzo: €${newPrice}</p>
             `
           })
         });
@@ -57,9 +75,7 @@ export default async function handler(req, res) {
     res.status(200).json({ success: true });
 
   } catch (err) {
-
     res.status(500).json({ error: err.message });
-
   }
 
 }
