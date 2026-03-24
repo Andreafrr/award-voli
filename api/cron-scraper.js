@@ -1,4 +1,4 @@
-import fs from "fs";
+let data = [];
 
 export default async function handler(req, res){
 
@@ -8,13 +8,6 @@ export default async function handler(req, res){
     { from: "FCO", to: "DXB" }
   ];
 
-  let data = [];
-
-  try{
-    data = JSON.parse(fs.readFileSync("./data/awards.json"));
-  }catch{}
-
-  // 🔥 simulazione (poi mettiamo scraping vero)
   routes.forEach(r=>{
 
     const points = Math.floor(Math.random()*30000)+40000;
@@ -29,7 +22,8 @@ export default async function handler(req, res){
 
   });
 
-  fs.writeFileSync("./data/awards.json", JSON.stringify(data, null, 2));
-
-  res.status(200).json({success:true, added:routes.length});
+  res.status(200).json({
+    success:true,
+    data
+  });
 }
