@@ -8,7 +8,6 @@
 body{font-family:sans-serif;background:#f8fafc;text-align:center}
 .container{max-width:700px;margin:40px auto}
 .card{background:white;padding:20px;margin:15px;border-radius:10px;text-align:left}
-.highlight{border:2px solid green}
 </style>
 
 </head>
@@ -17,17 +16,11 @@ body{font-family:sans-serif;background:#f8fafc;text-align:center}
 
 <div class="container">
 
-<h1>✈️ Trova voli premio REALI</h1>
+<h1>✈️ Cerca voli Flying Blue reali</h1>
 
-<select id="from">
-<option value="MXP">Milano</option>
-<option value="FCO">Roma</option>
-</select>
-
-<select id="dest">
-<option value="MAD">Madrid</option>
-<option value="LHR">Londra</option>
-</select>
+<input id="from" placeholder="MXP">
+<input id="to" placeholder="JFK">
+<input id="date" type="date">
 
 <br><br>
 
@@ -42,33 +35,24 @@ body{font-family:sans-serif;background:#f8fafc;text-align:center}
 function search(){
 
 const from=document.getElementById("from").value
-const dest=document.getElementById("dest").value
+const to=document.getElementById("to").value
+const date=document.getElementById("date").value
 
-fetch(`/api/avios-search?from=${from}&dest=${dest}`)
+fetch(`/api/flyingblue?from=${from}&to=${to}&date=${date}`)
 .then(res=>res.json())
 .then(data=>{
 
 let html=""
 
-data.forEach(f=>{
+if(!data.results){
+html="Nessun risultato"
+}else{
 
-html+=`
-<div class="card highlight">
-
-<b>${f.from} → ${f.dest}</b><br><br>
-
-💳 ${f.points} punti Avios<br>
-💸 Tasse: €${f.taxes}<br>
-💰 Cash stimato: €${f.cash}<br><br>
-
-📊 Valore: ${f.value} cent/punto<br><br>
-
-${f.value >= 1 ? "🔥 Buona opportunità" : ""}
-
-</div>
-`
-
+data.results.forEach(r=>{
+html+=`<div class="card">💳 ${r}</div>`
 })
+
+}
 
 document.getElementById("results").innerHTML=html
 
