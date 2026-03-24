@@ -4,12 +4,16 @@ export default function handler(req, res) {
 
   if (req.method === "POST") {
 
-    const { email, destination, price } = req.body;
+    const { email, destination, origin, destCode, cabin, price, value } = req.body;
 
     savedTrips.push({
       email,
       destination,
+      origin,
+      destCode,
+      cabin,
       price,
+      value,
       createdAt: new Date()
     });
 
