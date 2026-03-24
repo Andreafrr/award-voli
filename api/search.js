@@ -3,7 +3,6 @@ const { routes } = require("../data/routes.js");
 const cache = {};
 const CACHE_TTL = 30 * 60 * 1000;
 
-// 🎯 Conversione MR
 function getMRRequired(program, airlinePoints) {
   const rates = {
     "Avios (Iberia / BA)": 5 / 4,
@@ -15,9 +14,8 @@ function getMRRequired(program, airlinePoints) {
   return Math.ceil(airlinePoints * (rates[program] || 1));
 }
 
-// 🧠 VALORI INTELLIGENTI (fallback realistico)
+// 🎯 fallback realistico
 function getFallbackValue(route) {
-
   const regionBase = {
     "Europa": 0.6,
     "Nord America": 0.8,
@@ -27,14 +25,23 @@ function getFallbackValue(route) {
 
   const cabinMultiplier = {
     "Economy": 1,
+    "Premium Economy": 1.4,
     "Business": 2.2,
     "First": 3
   };
 
-  let base = regionBase[route.region] || 0.7;
-  let multiplier = cabinMultiplier[route.cabin] || 1;
+  return (regionBase[route.region] || 0.7) * (cabinMultiplier[route.cabin] || 1);
+}
 
-  return base * multiplier;
+// 🌤 miglior mese
+function getBestMonth(route) {
+  const map = {
+    "Europa": "Aprile - Giugno",
+    "Nord America": "Settembre - Novembre",
+    "Asia": "Gennaio - Marzo",
+    "Medio Oriente": "Novembre - Febbraio"
+  };
+  return map[route.region] || "Tutto l’anno";
 }
 
 module.exports = async function handler(req, res) {
@@ -57,7 +64,7 @@ module.exports = async function handler(req, res) {
       filtered = filtered.filter(r => r.cabin === cabin);
     }
 
-    // 🔐 Token Amadeus
+    // 🔐 token Amadeus
     const tokenRes = await fetch(
       "https://test.api.amadeus.com/v1/security/oauth2/token",
       {
@@ -70,20 +77,6 @@ module.exports = async function handler(req, res) {
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
 
-    // 📅 date flessibili
-    function getDates(baseDate) {
-      const base = baseDate ? new Date(baseDate) : new Date();
-      const dates = [];
-
-      for (let i = -2; i <= 2; i++) {
-        const d = new Date(base);
-        d.setDate(base.getDate() + i);
-        dates.push(d.toISOString().split("T")[0]);
-      }
-
-      return dates;
-    }
-
     async function getCash(origin, destination, cabin) {
 
       const cacheKey = `${origin}-${destination}-${cabin}-${date}`;
@@ -93,46 +86,28 @@ module.exports = async function handler(req, res) {
         return cache[cacheKey].data;
       }
 
-      const cabinMap = {
-        Economy: "ECONOMY",
-        Business: "BUSINESS",
-        First: "FIRST"
-      };
+      try {
 
-      const travelClass = cabinMap[cabin] || "ECONOMY";
+        const res = await fetch(
+          `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&adults=1&max=3`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
 
-      const prices = [];
-      const dates = getDates(date);
+        const data = await res.json();
 
-      for (const d of dates) {
-        try {
-          const res = await fetch(
-            `https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${d}&adults=1&travelClass=${travelClass}&max=3`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
+        if (!data.data || data.data.length === 0) return null;
 
-          const data = await res.json();
+        const prices = data.data.map(f => parseFloat(f.price.total));
+        const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
 
-          if (data.data && data.data.length > 0) {
-            prices.push(
-              Math.min(...data.data.map(f => parseFloat(f.price.total)))
-            );
-          }
-        } catch {}
+        return { average: avg };
+
+      } catch {
+        return null;
       }
-
-      if (prices.length === 0) return null;
-
-      const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
-
-      const result = { average: avg };
-
-      cache[cacheKey] = { timestamp: now, data: result };
-
-      return result;
     }
 
-    const enriched = await Promise.all(
+    let enriched = await Promise.all(
       filtered.map(async route => {
 
         const cash = await getCash(
@@ -144,13 +119,11 @@ module.exports = async function handler(req, res) {
         const mrRequired = getMRRequired(route.program, route.points);
         const mrMissing = Math.max(0, mrRequired - parsedMaxMR);
 
-        // 📅 mesi necessari
         let monthsNeeded = null;
         if (mrMissing > 0 && parsedMonthly > 0) {
           monthsNeeded = Math.ceil(mrMissing / parsedMonthly);
         }
 
-        // 🎯 VALUE CALCULATION
         let value = 0;
 
         if (cash) {
@@ -159,27 +132,19 @@ module.exports = async function handler(req, res) {
           value = getFallbackValue(route);
         }
 
-        // 🛑 evita valori assurdi
         if (value < 0) value = 0;
         if (value > 5) value = 5;
 
-        // 🎯 SCORE
         const valueScore = Math.min(100, value * 50);
-
-        let difficultyScore = 70;
-        if (route.difficulty === 1) difficultyScore = 100;
-        if (route.difficulty === 3) difficultyScore = 40;
-
         const budgetScore = mrMissing === 0 ? 100 : 40;
 
         let futureBonus = 0;
         if (monthsNeeded !== null && monthsNeeded <= 3) futureBonus = 10;
         if (monthsNeeded !== null && monthsNeeded <= 6) futureBonus = 5;
 
-        let opportunityScore =
+        const opportunityScore =
           valueScore * 0.7 +
-          difficultyScore * 0.15 +
-          budgetScore * 0.15 +
+          budgetScore * 0.3 +
           futureBonus;
 
         return {
@@ -189,25 +154,33 @@ module.exports = async function handler(req, res) {
           opportunityScore: Math.round(opportunityScore),
           mrRequired,
           mrMissing,
-          monthsNeeded
+          monthsNeeded,
+          bestMonth: getBestMonth(route)
         };
 
       })
     );
 
-    // 📊 best value
-    const bestValue = Math.max(
-      ...enriched.map(r => parseFloat(r.estimatedValue))
-    );
+    // 🔥 rimuove duplicati (stessa destinazione → tiene miglior valore)
+    const unique = {};
 
     enriched.forEach(r => {
-      const val = parseFloat(r.estimatedValue) || 0;
+      const key = r.destination + "-" + r.cabin;
+      if (!unique[key] || parseFloat(r.estimatedValue) > parseFloat(unique[key].estimatedValue)) {
+        unique[key] = r;
+      }
+    });
+
+    enriched = Object.values(unique);
+
+    const bestValue = Math.max(...enriched.map(r => parseFloat(r.estimatedValue)));
+
+    enriched.forEach(r => {
       r.valuePercent = bestValue > 0
-        ? Math.round((val / bestValue) * 100)
+        ? Math.round((parseFloat(r.estimatedValue) / bestValue) * 100)
         : 0;
     });
 
-    // 🔥 ORDINE
     enriched.sort((a, b) => b.opportunityScore - a.opportunityScore);
 
     const bookable = enriched.filter(r => r.mrMissing === 0);
@@ -219,12 +192,9 @@ module.exports = async function handler(req, res) {
     });
 
   } catch (error) {
-
     res.status(500).json({
       error: "Errore server",
       details: error.message
     });
-
   }
-
 };
