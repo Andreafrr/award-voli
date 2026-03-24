@@ -16,15 +16,9 @@ body{font-family:sans-serif;background:#f8fafc;text-align:center}
 
 <div class="container">
 
-<h1>✈️ Cerca voli Flying Blue reali</h1>
+<h1>✈️ Voli premio trovati</h1>
 
-<input id="from" placeholder="MXP">
-<input id="to" placeholder="JFK">
-<input id="date" type="date">
-
-<br><br>
-
-<button onclick="search()">Cerca</button>
+<button onclick="load()">Carica opportunità</button>
 
 <div id="results"></div>
 
@@ -32,27 +26,26 @@ body{font-family:sans-serif;background:#f8fafc;text-align:center}
 
 <script>
 
-function search(){
+function load(){
 
-const from=document.getElementById("from").value
-const to=document.getElementById("to").value
-const date=document.getElementById("date").value
-
-fetch(`/api/flyingblue?from=${from}&to=${to}&date=${date}`)
+fetch("/api/get-awards")
 .then(res=>res.json())
 .then(data=>{
 
 let html=""
 
-if(!data.results){
-html="Nessun risultato"
-}else{
+data.slice(-10).reverse().forEach(f=>{
 
-data.results.forEach(r=>{
-html+=`<div class="card">💳 ${r}</div>`
+html+=`
+<div class="card">
+
+<b>${f.from} → ${f.to}</b><br>
+📅 ${f.date}<br>
+💳 ${f.points} punti<br>
+
+</div>
+`
 })
-
-}
 
 document.getElementById("results").innerHTML=html
 
